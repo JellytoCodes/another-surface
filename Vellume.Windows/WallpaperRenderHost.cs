@@ -41,7 +41,7 @@ internal sealed class WallpaperRenderHostClient : IWallpaperRenderer
             : _state.BackendDisplayName;
     public bool IsReady =>
         _process is { HasExited: false } &&
-        _state.IsReady;
+        _state.IsReady && NativeMethods.IsWindow(Handle);
 
     public string GetAttachmentDiagnostics()
         => string.IsNullOrWhiteSpace(
@@ -133,8 +133,8 @@ internal sealed class WallpaperRenderHostClient : IWallpaperRenderer
             cancellationToken);
 
     public bool IsAttachedTo(nint hostHandle)
-        => _state.Handle != 0 &&
-           _state.ParentHandle == hostHandle.ToInt64();
+        => NativeMethods.IsWindow(Handle) &&
+           NativeMethods.GetParent(Handle) == hostHandle;
 
     public async Task SetWindowVisibleAsync(
         bool visible,
@@ -590,7 +590,7 @@ public static class WallpaperRenderHostServer
                             // not briefly force the renderer on-screen.
                             renderer.SetWindowVisible(
                                 request.Visible);
-                            Attach(renderer, attachment);
+                            await AttachAsync(renderer, attachment, cancellationToken);
                             renderer.SetWindowVisible(
                                 request.Visible);
                             break;
@@ -672,19 +672,21 @@ public static class WallpaperRenderHostServer
         }
     }
 
-    private static void Attach(
+    private static Task AttachAsync(
         WallpaperRendererWindow renderer,
-        RenderHostAttachment attachment)
+        RenderHostAttachment attachment,
+        CancellationToken cancellationToken)
     {
         var display = attachment.Display ??
             throw new InvalidOperationException(
                 "렌더 호스트 모니터 정보가 없습니다.");
-        renderer.AttachTo(
+        return ((IWallpaperRenderer)renderer).AttachToAsync(
             new nint(attachment.HostHandle),
             display,
             attachment.RaisedDesktop,
             new nint(attachment.ShellViewHandle),
-            new nint(attachment.BackgroundWorkerHandle));
+            new nint(attachment.BackgroundWorkerHandle),
+            cancellationToken);
     }
 
     private static RenderHostState CaptureState(

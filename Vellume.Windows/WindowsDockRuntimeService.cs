@@ -119,14 +119,21 @@ public sealed class WindowsDockRuntimeService : IDisposable
         }
     }
 
-    public IReadOnlyList<DockApplicationSnapshot> Capture()
+    public IReadOnlyList<DockApplicationSnapshot> Capture(
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var captureStarted = Stopwatch.GetTimestamp();
         var foreground = GetForegroundWindow();
         var windows = new List<(nint Handle, uint ProcessId, string Title)>();
         EnumWindows(
             (window, _) =>
             {
+                // Do not throw through an unmanaged EnumWindows callback.
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return false;
+                }
                 if (!IsTaskWindow(window))
                 {
                     return true;
@@ -148,10 +155,12 @@ public sealed class WindowsDockRuntimeService : IDisposable
                 return true;
             },
             nint.Zero);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var result = new List<DockApplicationSnapshot>();
         foreach (var processWindows in windows.GroupBy(item => item.ProcessId))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!TryGetProcessIdentity(
                     processWindows.Key,
                     out var identity))
@@ -181,6 +190,7 @@ public sealed class WindowsDockRuntimeService : IDisposable
         var activeProcessIds = windows
             .Select(item => item.ProcessId)
             .ToHashSet();
+        cancellationToken.ThrowIfCancellationRequested();
         foreach (var processId in _processIdentities.Keys
                      .Where(processId =>
                          !activeProcessIds.Contains(processId))

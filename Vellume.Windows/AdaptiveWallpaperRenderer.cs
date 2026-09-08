@@ -9,7 +9,10 @@ namespace Vellume.Windows;
 internal sealed class AdaptiveWallpaperRenderer : IWallpaperRenderer
 {
     private readonly string _webViewDataDirectory;
+    private readonly Func<IWallpaperRenderer?> _nativeRendererFactory;
+    private readonly Func<IWallpaperRenderer> _managedRendererFactory;
     private IWallpaperRenderer? _active;
+    private bool _usingNativeRenderer;
     private WallpaperItem? _wallpaper;
     private PlaybackOptions? _options;
     private RenderAttachment? _attachment;
@@ -18,9 +21,19 @@ internal sealed class AdaptiveWallpaperRenderer : IWallpaperRenderer
     private bool _closed;
     private string _fallbackReason = string.Empty;
 
-    internal AdaptiveWallpaperRenderer(string webViewDataDirectory)
+    internal AdaptiveWallpaperRenderer(
+        string webViewDataDirectory,
+        Func<IWallpaperRenderer?>? nativeRendererFactory = null,
+        Func<IWallpaperRenderer>? managedRendererFactory = null)
     {
         _webViewDataDirectory = webViewDataDirectory;
+        _nativeRendererFactory = nativeRendererFactory ?? (() =>
+        {
+            var path = NativeWallpaperRendererClient.ResolveExecutablePath();
+            return path is null ? null : new NativeWallpaperRendererClient(path);
+        });
+        _managedRendererFactory = managedRendererFactory ??
+            (() => new WallpaperRenderHostClient(_webViewDataDirectory));
     }
 
     public nint Handle => _active?.Handle ?? nint.Zero;
@@ -61,7 +74,9 @@ internal sealed class AdaptiveWallpaperRenderer : IWallpaperRenderer
 
         await AttachActiveAsync(_active, cancellationToken)
             .ConfigureAwait(false);
-        if (_wallpaper is not null && _options is not null)
+        // Geometry-only attachment preserves a live renderer's decoded content.
+        // Reload only if its HWND/content was actually lost (for example Explorer restart).
+        if (!_active.IsReady && _wallpaper is not null && _options is not null)
         {
             await _active.InitializeAndNavigateAsync(
                     _wallpaper,
@@ -85,12 +100,11 @@ internal sealed class AdaptiveWallpaperRenderer : IWallpaperRenderer
         _options = options.Copy();
         await CloseActiveAsync().ConfigureAwait(false);
 
-        var nativePath = NativeWallpaperRendererClient
-            .ResolveExecutablePath();
-        if (nativePath is not null &&
-            ShouldUseNativeRenderer(wallpaper, options))
+        var native = ShouldUseNativeRenderer(wallpaper, options)
+            ? _nativeRendererFactory()
+            : null;
+        if (native is not null)
         {
-            var native = new NativeWallpaperRendererClient(nativePath);
             try
             {
                 await StartRendererAsync(
@@ -100,6 +114,7 @@ internal sealed class AdaptiveWallpaperRenderer : IWallpaperRenderer
                         cancellationToken)
                     .ConfigureAwait(false);
                 _active = native;
+                _usingNativeRenderer = true;
                 _fallbackReason = string.Empty;
                 return;
             }
@@ -115,8 +130,7 @@ internal sealed class AdaptiveWallpaperRenderer : IWallpaperRenderer
             }
         }
 
-        var managed = new WallpaperRenderHostClient(
-            _webViewDataDirectory);
+        var managed = _managedRendererFactory();
         try
         {
             await StartRendererAsync(
@@ -126,6 +140,7 @@ internal sealed class AdaptiveWallpaperRenderer : IWallpaperRenderer
                     cancellationToken)
                 .ConfigureAwait(false);
             _active = managed;
+            _usingNativeRenderer = false;
         }
         catch
         {
@@ -178,12 +193,83 @@ internal sealed class AdaptiveWallpaperRenderer : IWallpaperRenderer
 
     public async Task UpdatePlaybackAsync(PlaybackOptions options)
     {
-        _options = options.Copy();
+        ObjectDisposedException.ThrowIf(_closed, this);
+        if (_active is not null && _wallpaper?.Kind == WallpaperKind.Video)
+        {
+            var wantsNative = ShouldUseNativeRenderer(_wallpaper, options);
+            if (_usingNativeRenderer && !wantsNative)
+            {
+                // The C++ HWND Media Engine path does not apply color filters.
+                // Keep the current frame visible until the compatible backend is ready.
+                await ReplaceRendererAsync(
+                    _managedRendererFactory(), options)
+                    .ConfigureAwait(false);
+                _options = options.Copy();
+                return;
+            }
+            // Once migrated, keep the compatible process until wallpaper reapply.
+            // Its existing WebView/MediaEngine policy handles returning to neutral
+            // colors without repeatedly creating C++ and managed child processes.
+        }
         if (_active is not null)
         {
             await _active.UpdatePlaybackAsync(options)
                 .ConfigureAwait(false);
+            if (_paused)
+            {
+                // The managed backend may internally switch WebView/MediaEngine.
+                await _active.PauseAsync().ConfigureAwait(false);
+            }
         }
+        _options = options.Copy();
+    }
+
+    private async Task ReplaceRendererAsync(
+        IWallpaperRenderer replacement,
+        PlaybackOptions options)
+    {
+        var previous = GetActive();
+        var pausedForSwap = false;
+        try
+        {
+            await AttachRendererAsync(replacement, CancellationToken.None)
+                .ConfigureAwait(false);
+            await replacement.SetWindowVisibleAsync(false, CancellationToken.None)
+                .ConfigureAwait(false);
+            var preparationOptions = options.Copy();
+            preparationOptions.IsMuted = true;
+            await replacement.InitializeAndNavigateAsync(
+                _wallpaper!, preparationOptions, CancellationToken.None)
+                .ConfigureAwait(false);
+            if (_paused)
+            {
+                await replacement.PauseAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                await previous.PauseAsync().ConfigureAwait(false);
+                pausedForSwap = true;
+            }
+            await replacement.UpdatePlaybackAsync(options).ConfigureAwait(false);
+            await replacement.SetWindowVisibleAsync(_visible, CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            await replacement.CloseSafelyAsync().ConfigureAwait(false);
+            if (pausedForSwap)
+            {
+                await previous.ResumeAsync().ConfigureAwait(false);
+            }
+            throw;
+        }
+
+        _active = replacement;
+        _usingNativeRenderer = false;
+        // IWallpaperRenderer has no seek contract: backend changes restart the
+        // video. Hidden, muted preparation avoids an empty surface/audio overlap,
+        // but does not promise frame-perfect continuity or playback-position retention.
+        await previous.CloseSafelyAsync().ConfigureAwait(false);
     }
 
     public async Task CloseSafelyAsync()
@@ -248,6 +334,7 @@ internal sealed class AdaptiveWallpaperRenderer : IWallpaperRenderer
     {
         var active = _active;
         _active = null;
+        _usingNativeRenderer = false;
         if (active is not null)
         {
             await active.CloseSafelyAsync().ConfigureAwait(false);

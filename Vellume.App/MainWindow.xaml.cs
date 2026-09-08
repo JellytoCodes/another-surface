@@ -41,6 +41,16 @@ public partial class MainWindow : Window
     private bool _runtimeRefreshInProgress;
     private bool _runtimeClosing;
     private bool _updatingPlaybackControls;
+    private bool _refreshingDisplays;
+    private readonly Dictionary<string, DisplayInfo> _displayStateCache =
+        new(StringComparer.OrdinalIgnoreCase);
+    // Actual renderer sources can differ from profile originals (video proxies).
+    // Keep disconnected/stopped displays until replacement or app exit: controllers
+    // can reconnect, and Stop can overlap an in-flight Apply on the UI dispatcher.
+    private readonly Dictionary<string, HashSet<string>> _activePlaybackSources =
+        new(StringComparer.OrdinalIgnoreCase);
+    private bool _cacheMaintenanceReady;
+    private DateTimeOffset _lastCacheMaintenanceUtc;
 
     public MainWindow(
         AppSettings settings,
@@ -74,6 +84,8 @@ public partial class MainWindow : Window
         _startupRegistrationService = startupRegistrationService;
         _systemEventMonitor.RecycleBinChanged +=
             SystemEventMonitor_RuntimeStateChanged;
+        _systemEventMonitor.DisplayConfigurationChanged +=
+            SystemEventMonitor_DisplayConfigurationChanged;
         _wallpaperController.StateChanged += WallpaperController_StateChanged;
         _wallpaperController.QuickSlotInvoked +=
             WallpaperController_QuickSlotInvoked;
@@ -136,6 +148,8 @@ public partial class MainWindow : Window
             QuickSlotRuntimeService_StateChanged;
         _systemEventMonitor.RecycleBinChanged -=
             SystemEventMonitor_RuntimeStateChanged;
+        _systemEventMonitor.DisplayConfigurationChanged -=
+            SystemEventMonitor_DisplayConfigurationChanged;
         _quickSlotRuntimeService.Dispose();
     }
 
@@ -168,18 +182,8 @@ public partial class MainWindow : Window
             }
             LibraryList.ItemsSource = Library;
 
-            foreach (var display in _monitorService.GetDisplays())
-            {
-                Displays.Add(display);
-            }
             DisplayList.ItemsSource = Displays;
-            DisplayList.SelectedItem =
-                Displays.FirstOrDefault(display =>
-                    display.Id == _settings.SelectedMonitorId) ??
-                Displays.FirstOrDefault(display => display.IsPrimary) ??
-                Displays.FirstOrDefault();
-            EnsureDisplayProfiles();
-            UpdateDisplayAssignmentLabels();
+            RefreshDisplays();
             if (DisplayList.SelectedItem is DisplayInfo selectedDisplay)
             {
                 _settings.Playback = _settings
@@ -304,6 +308,16 @@ public partial class MainWindow : Window
             {
                 await RestoreDisplayWallpapersAsync();
             }
+            _cacheMaintenanceReady = true;
+            await _wallpaperApplyGate.WaitAsync(_libraryLifetime.Token);
+            try
+            {
+                await MaintainVideoCacheAsync();
+            }
+            finally
+            {
+                _wallpaperApplyGate.Release();
+            }
         }
         catch (Exception exception)
         {
@@ -397,10 +411,12 @@ public partial class MainWindow : Window
 
         try
         {
+            display = FindCurrentDisplay(display);
             HomeStatusText.Text = "재생 엔진을 준비하고 바탕화면에 연결하는 중…";
             SidebarStatusText.Text = "적용 중…";
             var profile = _settings.GetOrCreateDisplayProfile(display.Id);
             var playbackWallpaper = wallpaper;
+            var generatedProxy = false;
             if (wallpaper.Kind == WallpaperKind.Video &&
                 profile.Playback.UseOptimizedVideo)
             {
@@ -412,18 +428,32 @@ public partial class MainWindow : Window
                     display.Height,
                     cancellation.Token);
                 playbackWallpaper = preparation.Wallpaper;
+                generatedProxy = preparation.GeneratedProxy;
                 await _logger.InfoAsync(
                     $"Video playback preparation for {display.Id}: " +
                     $"proxy={preparation.UsedProxy}, " +
                     $"generated={preparation.GeneratedProxy}, " +
                     preparation.Detail);
             }
+            if (!_activePlaybackSources.TryGetValue(display.Id, out var protectedSources))
+            {
+                protectedSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                _activePlaybackSources[display.Id] = protectedSources;
+            }
+            // A controller can retain the new session even if visibility/logging
+            // fails late in Apply. Keep both old and candidate sources on failure.
+            protectedSources.Add(playbackWallpaper.SourcePath);
             await _wallpaperController.ApplyAsync(
                 playbackWallpaper,
                 display,
                 profile.Playback.Copy(),
                 _settings.Widgets.Copy(),
                 cancellation.Token);
+            protectedSources.Clear();
+            protectedSources.Add(playbackWallpaper.SourcePath);
+            // Display topology can change while video preparation or renderer
+            // initialization is awaited. Update the current card, not its old snapshot.
+            display = FindCurrentDisplay(display);
             profile.Wallpaper = wallpaper.Copy();
             display.HasAssignedWallpaper = true;
             display.IsWallpaperPaused = false;
@@ -433,14 +463,15 @@ public partial class MainWindow : Window
                     StringComparison.OrdinalIgnoreCase))
             {
                 _settings.ActiveWallpaper = wallpaper;
+                _settings.SelectedMonitorId = display.Id;
                 _settings.Playback = profile.Playback.Copy();
                 NowPlayingText.Text = wallpaper.Name;
                 LibraryList.SelectedItem = wallpaper;
             }
-            _settings.SelectedMonitorId = display.Id;
             display.AssignedWallpaperName = wallpaper.Name;
             DisplayList.Items.Refresh();
             await SaveSettingsAsync();
+            await MaintainVideoCacheAsync(force: generatedProxy);
         }
         catch (OperationCanceledException)
             when (_runtimeClosing ||
@@ -477,6 +508,38 @@ public partial class MainWindow : Window
     {
         _settings.Library = Library.ToList();
         await _settingsStore.SaveAsync(_settings);
+    }
+
+    // Called while _wallpaperApplyGate is held, so cleanup cannot race another
+    // cache preparation or a renderer starting to use an unprotected source.
+    private async Task MaintainVideoCacheAsync(bool force = false)
+    {
+        if (!_cacheMaintenanceReady || _runtimeClosing ||
+            (!force && DateTimeOffset.UtcNow - _lastCacheMaintenanceUtc < TimeSpan.FromMinutes(10)))
+        {
+            return;
+        }
+        _lastCacheMaintenanceUtc = DateTimeOffset.UtcNow;
+        try
+        {
+            var result = await _libraryStore.CleanupVideoCacheAsync(
+                _activePlaybackSources.Values.SelectMany(paths => paths).ToArray(),
+                _libraryLifetime.Token);
+            if (result.RemovedFiles > 0)
+            {
+                await _logger.InfoAsync(
+                    $"미사용 영상 캐시 {result.RemovedFiles}개 정리 " +
+                    $"({result.RemovedBytes / (1024 * 1024)} MB). 원본과 재생 중인 캐시는 보존했습니다.");
+            }
+        }
+        catch (OperationCanceledException) when (_runtimeClosing)
+        {
+            // App exit takes priority over optional cache maintenance.
+        }
+        catch (Exception exception)
+        {
+            await _logger.ErrorAsync("영상 캐시 정리를 건너뜁니다. 재생은 계속합니다.", exception);
+        }
     }
 
     private async Task MigrateLibraryToManagedStorageAsync(
@@ -941,11 +1004,13 @@ public partial class MainWindow : Window
             if (display.IsWallpaperPaused)
             {
                 await _wallpaperController.ResumeDisplayAsync(display.Id);
+                display = FindCurrentDisplay(display);
                 display.IsWallpaperPaused = false;
             }
             else
             {
                 await _wallpaperController.PauseDisplayAsync(display.Id);
+                display = FindCurrentDisplay(display);
                 display.IsWallpaperPaused = true;
             }
             DisplayList.Items.Refresh();
@@ -981,6 +1046,7 @@ public partial class MainWindow : Window
     private async Task StopDisplayCoreAsync(DisplayInfo display)
     {
         await _wallpaperController.StopDisplayAsync(display.Id);
+        display = FindCurrentDisplay(display);
         var profile = _settings.GetOrCreateDisplayProfile(display.Id);
         profile.Wallpaper = null;
         display.AssignedWallpaperName = "미적용";
@@ -996,7 +1062,8 @@ public partial class MainWindow : Window
         object sender,
         SelectionChangedEventArgs eventArgs)
     {
-        if (!_initialized || DisplayList.SelectedItem is not DisplayInfo display)
+        if (!_initialized || _refreshingDisplays ||
+            DisplayList.SelectedItem is not DisplayInfo display)
         {
             return;
         }
@@ -2115,19 +2182,72 @@ public partial class MainWindow : Window
         }
     }
 
-    private void UpdateDisplayAssignmentLabels()
+    private async void SystemEventMonitor_DisplayConfigurationChanged(
+        object? sender,
+        EventArgs eventArgs)
     {
-        foreach (var display in Displays)
+        if (!_initialized || _runtimeClosing)
         {
-            display.AssignedWallpaperName =
-                _settings.FindDisplayProfile(display.Id)?.Wallpaper?.Name ??
-                "미적용";
-            display.HasAssignedWallpaper =
-                _settings.FindDisplayProfile(display.Id)?.Wallpaper is not null;
-            display.IsWallpaperPaused = false;
+            return;
         }
-        DisplayList.Items.Refresh();
+
+        try
+        {
+            RefreshDisplays();
+            await SaveSettingsAsync();
+        }
+        catch (Exception exception)
+        {
+            await _logger.ErrorAsync("변경된 디스플레이 목록을 갱신하지 못했습니다.", exception);
+        }
     }
+
+    private void RefreshDisplays()
+    {
+        var latestDisplays = _monitorService.GetDisplays();
+        var selectedId = (DisplayList.SelectedItem as DisplayInfo)?.Id ??
+            _settings.SelectedMonitorId;
+        _refreshingDisplays = true;
+        try
+        {
+            Displays.Clear();
+            foreach (var display in latestDisplays)
+            {
+                var wallpaper = _settings.FindDisplayProfile(display.Id)?.Wallpaper;
+                display.AssignedWallpaperName = wallpaper?.Name ?? "미적용";
+                display.HasAssignedWallpaper = wallpaper is not null;
+                // Keep paused cards across disconnect/reconnect, while honoring
+                // assignments cleared by Stop All or library deletion while absent.
+                display.IsWallpaperPaused = display.HasAssignedWallpaper &&
+                    _displayStateCache.TryGetValue(display.Id, out var previous) &&
+                    previous.IsWallpaperPaused;
+                _displayStateCache[display.Id] = display;
+                Displays.Add(display);
+            }
+
+            EnsureDisplayProfiles();
+            DisplayList.SelectedItem = Displays.FirstOrDefault(display =>
+                display.Id.Equals(selectedId, StringComparison.OrdinalIgnoreCase)) ??
+                Displays.FirstOrDefault(display => display.IsPrimary) ??
+                Displays.FirstOrDefault();
+            if (_initialized && DisplayList.SelectedItem is DisplayInfo selected)
+            {
+                _settings.SelectedMonitorId = selected.Id;
+                var profile = _settings.GetOrCreateDisplayProfile(selected.Id);
+                _settings.Playback = profile.Playback.Copy();
+                ApplyPlaybackProfileToControls(profile.Playback);
+                NowPlayingText.Text = profile.Wallpaper?.Name ??
+                    "선택 화면에 적용된 월페이퍼 없음";
+            }
+        }
+        finally
+        {
+            _refreshingDisplays = false;
+        }
+    }
+
+    private DisplayInfo FindCurrentDisplay(DisplayInfo display)
+        => _displayStateCache.GetValueOrDefault(display.Id) ?? display;
 
     private void ApplyPlaybackProfileToControls(
         PlaybackOptions playback)
@@ -2157,7 +2277,8 @@ public partial class MainWindow : Window
             DisplayList.SelectedItem as DisplayInfo ??
             Displays.FirstOrDefault(display => display.IsPrimary);
         foreach (var display in Displays
-                     .OrderByDescending(candidate => candidate.IsPrimary))
+                     .OrderByDescending(candidate => candidate.IsPrimary)
+                     .ToArray())
         {
             var profile = _settings.FindDisplayProfile(display.Id);
             if (profile?.Wallpaper is null)
@@ -2184,10 +2305,17 @@ public partial class MainWindow : Window
 
         if (originallySelected is not null)
         {
-            DisplayList.SelectedItem = originallySelected;
-            _settings.SelectedMonitorId = originallySelected.Id;
+            var currentSelection = Displays.FirstOrDefault(display =>
+                display.Id.Equals(originallySelected.Id, StringComparison.OrdinalIgnoreCase)) ??
+                DisplayList.SelectedItem as DisplayInfo;
+            if (currentSelection is null)
+            {
+                return;
+            }
+            DisplayList.SelectedItem = currentSelection;
+            _settings.SelectedMonitorId = currentSelection.Id;
             var profile = _settings.GetOrCreateDisplayProfile(
-                originallySelected.Id);
+                currentSelection.Id);
             _settings.Playback = profile.Playback.Copy();
             ApplyPlaybackProfileToControls(profile.Playback);
             NowPlayingText.Text =

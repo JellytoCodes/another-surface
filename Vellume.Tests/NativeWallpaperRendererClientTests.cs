@@ -3,11 +3,14 @@ using Vellume.Windows;
 
 namespace Vellume.Tests;
 
+[Collection("Native renderer environment")]
 public sealed class NativeWallpaperRendererClientTests
 {
-    [Fact]
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     [Trait("Category", "LocalIntegration")]
-    public async Task ImageLifecycle_UsesDwmRedirectedCompositionWindow()
+    public async Task ImageLifecycle_UsesDwmRedirectedCompositionWindow(bool useAdaptiveWrapper)
     {
         var root = FindRepositoryRoot();
         var executablePath = Path.Combine(
@@ -30,8 +33,19 @@ public sealed class NativeWallpaperRendererClientTests
         var parent = host.Handle;
         Assert.NotEqual(nint.Zero, parent);
 
-        var renderer = new NativeWallpaperRendererClient(
-            executablePath);
+        var previousExecutable = Environment.GetEnvironmentVariable(
+            "VELLUME_NATIVE_RENDERER_EXECUTABLE");
+        var previousDisable = Environment.GetEnvironmentVariable(
+            "VELLUME_DISABLE_NATIVE_RENDERER");
+        if (useAdaptiveWrapper)
+        {
+            Environment.SetEnvironmentVariable("VELLUME_NATIVE_RENDERER_EXECUTABLE", executablePath);
+            Environment.SetEnvironmentVariable("VELLUME_DISABLE_NATIVE_RENDERER", null);
+        }
+        IWallpaperRenderer renderer = useAdaptiveWrapper
+            ? new AdaptiveWallpaperRenderer(Path.Combine(
+                Path.GetTempPath(), "Vellume.NativeRendererTests", Guid.NewGuid().ToString("N")))
+            : new NativeWallpaperRendererClient(executablePath);
         nint rendererHandle = nint.Zero;
         try
         {
@@ -84,8 +98,49 @@ public sealed class NativeWallpaperRendererClientTests
             Assert.Contains(
                 "redirectionBitmap=true",
                 renderer.GetAttachmentDiagnostics());
+            AssertPhysicalBounds(rendererHandle, display);
+            Assert.Contains("image=320x320", renderer.GetAttachmentDiagnostics());
+            Assert.Contains("imageUploads=1", renderer.GetAttachmentDiagnostics());
+            await renderer.UpdatePlaybackAsync(new PlaybackOptions { Brightness = 0.8 });
+            Assert.Contains("imageUploads=1", renderer.GetAttachmentDiagnostics());
+
+            // A no-op attach must not discard the decoded image or its HWND.
+            await renderer.AttachToAsync(
+                parent, display, false, nint.Zero, nint.Zero, timeout.Token);
+            Assert.Equal(rendererHandle, renderer.Handle);
+            Assert.True(renderer.IsReady);
+            AssertPhysicalBounds(rendererHandle, display);
+
+            var resizedDisplay = new DisplayInfo
+            {
+                Id = display.Id,
+                Name = display.Name,
+                X = -31980,
+                Y = -31970,
+                Width = 480,
+                Height = 270,
+                IsPrimary = true
+            };
+            await renderer.AttachToAsync(
+                parent, resizedDisplay, false, nint.Zero, nint.Zero, timeout.Token);
+            Assert.Equal(rendererHandle, renderer.Handle);
+            Assert.True(renderer.IsReady);
+            Assert.Contains("WIC", renderer.BackendDisplayName);
+            AssertPhysicalBounds(rendererHandle, resizedDisplay);
+            Assert.Contains("image=480x480", renderer.GetAttachmentDiagnostics());
+            Assert.Contains("imageUploads=2", renderer.GetAttachmentDiagnostics());
+
+            // Exercise both growth and shrinkage of the existing swap chain.
+            await renderer.AttachToAsync(
+                parent, display, false, nint.Zero, nint.Zero, timeout.Token);
+            Assert.Equal(rendererHandle, renderer.Handle);
+            Assert.True(renderer.IsReady);
+            AssertPhysicalBounds(rendererHandle, display);
 
             await renderer.SetWindowVisibleAsync(false, timeout.Token);
+            Assert.False(NativeMethods.IsWindowVisible(rendererHandle));
+            await renderer.AttachToAsync(
+                parent, display, false, nint.Zero, nint.Zero, timeout.Token);
             Assert.False(NativeMethods.IsWindowVisible(rendererHandle));
             await renderer.SetWindowVisibleAsync(true, timeout.Token);
             Assert.True(NativeMethods.IsWindowVisible(rendererHandle));
@@ -97,16 +152,84 @@ public sealed class NativeWallpaperRendererClientTests
                     Contrast = 1.1,
                     Saturation = 0.7
                 });
+            Assert.Contains("image=180x180", renderer.GetAttachmentDiagnostics());
+            Assert.Contains("imageUploads=4", renderer.GetAttachmentDiagnostics());
             await renderer.PauseAsync();
             await renderer.ResumeAsync();
         }
         finally
         {
-            await renderer.CloseSafelyAsync();
+            try
+            {
+                await renderer.CloseSafelyAsync();
+            }
+            finally
+            {
+                if (useAdaptiveWrapper)
+                {
+                    Environment.SetEnvironmentVariable("VELLUME_NATIVE_RENDERER_EXECUTABLE", previousExecutable);
+                    Environment.SetEnvironmentVariable("VELLUME_DISABLE_NATIVE_RENDERER", previousDisable);
+                }
+            }
         }
 
         Assert.False(renderer.IsReady);
         Assert.False(NativeMethods.IsWindow(rendererHandle));
+    }
+
+    [Theory]
+    [InlineData(210, 90, WallpaperFit.Fill, 210, 119)]
+    [InlineData(210, 90, WallpaperFit.Fit, 160, 90)]
+    [InlineData(90, 160, WallpaperFit.Fill, 285, 160)]
+    [InlineData(90, 160, WallpaperFit.Fit, 90, 51)]
+    [Trait("Category", "LocalIntegration")]
+    public async Task ImageDecode_UsesDisplayResolutionAndReloadsOriginalWhenGrowing(
+        int width, int height, WallpaperFit fit, int decodedWidth, int decodedHeight)
+    {
+        var imagePath = Path.Combine(Path.GetTempPath(), $"VellumeDecodeTest-{Guid.NewGuid():N}.png");
+        var executablePath = Path.Combine(FindRepositoryRoot(), "Vellume.Renderer.Native",
+            "bin", "x64", "Release", "Vellume.Renderer.Native.exe");
+        Assert.True(File.Exists(executablePath));
+        using var host = new MessageWindowHost();
+        var renderer = new NativeWallpaperRendererClient(executablePath);
+        try
+        {
+            using (var bitmap = new System.Drawing.Bitmap(1920, 1080))
+            {
+                using var graphics = System.Drawing.Graphics.FromImage(bitmap);
+                graphics.Clear(System.Drawing.Color.MidnightBlue);
+                bitmap.Save(imagePath, System.Drawing.Imaging.ImageFormat.Png);
+            }
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            var display = new DisplayInfo
+            {
+                Id = "decode-test", Name = "Decode test", X = -32000, Y = -32000,
+                Width = width, Height = height
+            };
+            await renderer.AttachToAsync(host.Handle, display, false, nint.Zero, nint.Zero, timeout.Token);
+            await renderer.InitializeAndNavigateAsync(new WallpaperItem
+            {
+                Name = "Decode test", SourcePath = imagePath, Kind = WallpaperKind.Image
+            }, new PlaybackOptions { Fit = fit }, timeout.Token);
+            Assert.Contains($"image={decodedWidth}x{decodedHeight}", renderer.GetAttachmentDiagnostics());
+            Assert.Contains("imageUploads=1", renderer.GetAttachmentDiagnostics());
+
+            await renderer.UpdatePlaybackAsync(new PlaybackOptions { Fit = fit, Brightness = 0.9 });
+            Assert.Contains("imageUploads=1", renderer.GetAttachmentDiagnostics());
+            var grownDisplay = new DisplayInfo
+            {
+                Id = display.Id, Name = display.Name, X = display.X, Y = display.Y,
+                Width = 1920, Height = 1080
+            };
+            await renderer.AttachToAsync(host.Handle, grownDisplay, false, nint.Zero, nint.Zero, timeout.Token);
+            Assert.Contains("image=1920x1080", renderer.GetAttachmentDiagnostics());
+            Assert.Contains("imageUploads=2", renderer.GetAttachmentDiagnostics());
+        }
+        finally
+        {
+            await renderer.CloseSafelyAsync();
+            File.Delete(imagePath);
+        }
     }
 
     [Fact]
@@ -172,8 +295,25 @@ public sealed class NativeWallpaperRendererClientTests
             Assert.Contains(
                 "Media Foundation Media Engine",
                 renderer.BackendDisplayName);
+            var rendererHandle = renderer.Handle;
+            AssertPhysicalBounds(rendererHandle, display);
             await renderer.PauseAsync();
-            await Task.Delay(80, timeout.Token);
+            var resizedDisplay = new DisplayInfo
+            {
+                Id = display.Id,
+                Name = display.Name,
+                X = -31990,
+                Y = -31980,
+                Width = 480,
+                Height = 270,
+                IsPrimary = true
+            };
+            await renderer.AttachToAsync(
+                host.Handle, resizedDisplay, false, nint.Zero, nint.Zero, timeout.Token);
+            Assert.Equal(rendererHandle, renderer.Handle);
+            Assert.True(renderer.IsReady);
+            Assert.Contains("Media Foundation Media Engine", renderer.BackendDisplayName);
+            AssertPhysicalBounds(rendererHandle, resizedDisplay);
             await renderer.ResumeAsync();
             Assert.True(renderer.IsReady);
         }
@@ -183,6 +323,28 @@ public sealed class NativeWallpaperRendererClientTests
         }
 
         Assert.False(renderer.IsReady);
+    }
+
+    private static void AssertPhysicalBounds(nint handle, DisplayInfo display)
+    {
+        // The test runner itself need not be DPI aware; scope only this raw-pixel query.
+        var previousContext = NativeMethods.SetThreadDpiAwarenessContext(new nint(-4));
+        Assert.NotEqual(nint.Zero, previousContext);
+        try
+        {
+            Assert.True(NativeMethods.GetWindowRect(handle, out var bounds));
+            Assert.Equal(display.X, bounds.Left);
+            Assert.Equal(display.Y, bounds.Top);
+            Assert.Equal(display.X + display.Width, bounds.Right);
+            Assert.Equal(display.Y + display.Height, bounds.Bottom);
+            Assert.True(NativeMethods.GetClientRect(handle, out var client));
+            Assert.Equal(display.Width, client.Right - client.Left);
+            Assert.Equal(display.Height, client.Bottom - client.Top);
+        }
+        finally
+        {
+            NativeMethods.SetThreadDpiAwarenessContext(previousContext);
+        }
     }
 
     private static string FindRepositoryRoot()
@@ -255,8 +417,11 @@ public sealed class NativeWallpaperRendererClientTests
 
         private void Run()
         {
+            // Match the native child before creating its cross-process parent.
+            var previousContext = NativeMethods.SetThreadDpiAwarenessContext(new nint(-4));
             try
             {
+                Assert.NotEqual(nint.Zero, previousContext);
                 _dispatcher =
                     System.Windows.Threading.Dispatcher.CurrentDispatcher;
                 Handle = NativeMethods.CreateWindowExW(
@@ -284,10 +449,26 @@ public sealed class NativeWallpaperRendererClientTests
                 _ready.Set();
             }
 
-            if (_failure is null && Handle != nint.Zero)
+            try
             {
-                System.Windows.Threading.Dispatcher.Run();
+                if (_failure is null && Handle != nint.Zero)
+                {
+                    System.Windows.Threading.Dispatcher.Run();
+                }
+            }
+            finally
+            {
+                if (previousContext != nint.Zero)
+                {
+                    NativeMethods.SetThreadDpiAwarenessContext(previousContext);
+                }
             }
         }
     }
+}
+
+// The adaptive variant temporarily selects its native binary through process environment.
+[CollectionDefinition("Native renderer environment", DisableParallelization = true)]
+public sealed class NativeRendererEnvironmentCollection
+{
 }

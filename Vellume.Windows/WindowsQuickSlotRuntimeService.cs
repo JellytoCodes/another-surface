@@ -101,9 +101,11 @@ public sealed class WindowsQuickSlotRuntimeService : IDisposable
 
     public QuickSlotRuntimeSnapshot Capture(
         IReadOnlyList<QuickSlotItem> quickSlots,
-        IReadOnlyList<SystemShortcutSetting> systemShortcuts)
+        IReadOnlyList<SystemShortcutSetting> systemShortcuts,
+        CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
         ClearForegroundAttention();
         var targetStates = new Dictionary<
             string,
@@ -115,6 +117,7 @@ public sealed class WindowsQuickSlotRuntimeService : IDisposable
 
         foreach (var item in quickSlots)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var state = GetTargetState(
                 item.TargetPath,
                 targetStates);
@@ -126,6 +129,7 @@ public sealed class WindowsQuickSlotRuntimeService : IDisposable
             QuickSlotRuntimeState>();
         foreach (var item in systemShortcuts)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             systemStates[item.Kind] = item.Kind switch
             {
                 SystemShortcutKind.PowerShell => GetTargetState(

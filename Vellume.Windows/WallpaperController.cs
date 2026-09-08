@@ -198,7 +198,7 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 			_wallpaper = wallpaper;
 			_playbackOptions = continuousPlayback;
 			_widgetSettings = widgets.Copy();
-			_widgetDisplay = display;
+			_widgetDisplay = display.IsPrimary ? display : _widgetDisplay ?? display;
 			_manualPauseRequested = false;
 			_displayPauseRequested = false;
 			SetAutomaticAction(ApplicationPlaybackAction.KeepRunning);
@@ -208,12 +208,15 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 			}
 			else
 			{
-				await EnsureWidgetRendererAsync(hostHandle, display, _widgetSettings, cancellationToken);
+				await EnsureWidgetRendererAsync(hostHandle, _widgetDisplay, _widgetSettings, cancellationToken);
 				NativeWidgetRendererWindow widgetRenderer = _widgetRenderer ?? throw new InvalidOperationException("위젯 렌더러가 준비되지 않았습니다.");
-				await FinalizeDesktopLayerOrderAsync(renderer, widgetRenderer, hostHandle, display, cancellationToken);
+				if (display.Id.Equals(_widgetDisplay.Id, StringComparison.OrdinalIgnoreCase))
+				{
+					await FinalizeDesktopLayerOrderAsync(renderer, widgetRenderer, hostHandle, display, cancellationToken);
+				}
 				await _logger.InfoAsync("Final desktop layer order: wallpaper=(" + renderer.GetAttachmentDiagnostics() + "), widgets=(" + widgetRenderer.GetAttachmentDiagnostics() + ").");
 			}
-			await EnsureQuickSlotWindowsAsync(_interactiveHostHandle, display, _widgetSettings, cancellationToken);
+			await EnsureQuickSlotWindowsAsync(_interactiveHostHandle, _widgetDisplay, _widgetSettings, cancellationToken);
 			if (keepDesktopHandoffUntilReady)
 			{
 				SetDesktopOverlayVisibility(visible: false);
@@ -338,9 +341,9 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 		await _operationLock.WaitAsync(cancellationToken);
 		try
 		{
+			_manualPauseRequested = true;
 			if (_renderer != null)
 			{
-				_manualPauseRequested = true;
 				await _renderer.PauseAsync();
 				if (_widgetRenderer != null)
 				{
@@ -361,12 +364,12 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 		await _operationLock.WaitAsync(cancellationToken);
 		try
 		{
+			_manualPauseRequested = false;
+			_displayPauseRequested = false;
 			if (_renderer == null)
 			{
 				return;
 			}
-			_manualPauseRequested = false;
-			_displayPauseRequested = false;
 			if (_automaticAction != 0)
 			{
 				SetState(WallpaperPlaybackState.Paused, "집중 작업 앱 감지 · 렌더링 절전");
@@ -483,6 +486,87 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 				_hostHandle = hostHandle;
 				UpdateTimers();
 			}
+		}
+		finally
+		{
+			_operationLock.Release();
+		}
+	}
+
+	internal async Task RefreshDisplayGeometryAsync(IReadOnlyList<DisplayInfo> displays, CancellationToken cancellationToken = default)
+	{
+		await _operationLock.WaitAsync(cancellationToken);
+		try
+		{
+			if (_disposed)
+			{
+				return;
+			}
+			var latestDisplay = displays.FirstOrDefault(candidate =>
+				candidate.Id.Equals(_display?.Id, StringComparison.OrdinalIgnoreCase));
+			if (_display is not null && _wallpaper is not null && _playbackOptions is not null)
+			{
+				if (latestDisplay is null)
+				{
+					// Keep the assignment and pause flags for a later monitor reconnect.
+					if (_renderer is not null)
+					{
+						await _renderer.CloseSafelyAsync();
+						_renderer = null;
+					}
+				}
+				else if (!_display.HasSameGeometry(latestDisplay) ||
+					_renderer is null || !_renderer.IsAttachedTo(_hostHandle))
+				{
+					var host = FindWallpaperHostOrThrow();
+					var needsInitialization = _renderer is null || !_renderer.IsReady;
+					if (needsInitialization)
+					{
+						if (_renderer is not null)
+						{
+							await _renderer.CloseSafelyAsync();
+						}
+						_renderer = WallpaperRendererFactory.Create(_webViewDataDirectory);
+					}
+					await AttachWallpaperRendererAsync(_renderer!, host, latestDisplay, cancellationToken);
+					if (needsInitialization)
+					{
+						await _renderer!.InitializeAndNavigateAsync(_wallpaper, _playbackOptions, cancellationToken);
+						if (IsRenderingPaused || _displayPauseRequested)
+						{
+							await _renderer.PauseAsync();
+						}
+					}
+					_display = latestDisplay;
+					_hostHandle = host;
+					_interactiveHostHandle = _hostLocator.InteractiveHostHandle;
+					await _logger.InfoAsync($"Display geometry updated: {latestDisplay.Id} ({latestDisplay.X},{latestDisplay.Y}) {latestDisplay.Width}x{latestDisplay.Height} physical pixels.");
+				}
+			}
+
+			var widgetDisplay = displays.FirstOrDefault(candidate => candidate.IsPrimary) ?? displays.FirstOrDefault();
+			if (widgetDisplay is null)
+			{
+				await CloseWidgetCoreAsync(clearDisplay: true);
+				await CloseQuickSlotWindowsAsync();
+			}
+			else if (_widgetDisplay is null || !_widgetDisplay.HasSameGeometry(widgetDisplay) ||
+				(_widgetSettings.IsEnabled && HasInformationWidgets(_widgetSettings) && _widgetRenderer is null))
+			{
+				_widgetDisplay = widgetDisplay;
+				if (_widgetSettings.IsEnabled)
+				{
+					var host = FindWallpaperHostOrThrow();
+					if (HasInformationWidgets(_widgetSettings))
+					{
+						await EnsureWidgetRendererAsync(host, widgetDisplay, _widgetSettings, cancellationToken);
+					}
+					await EnsureQuickSlotWindowsAsync(_hostLocator.InteractiveHostHandle, widgetDisplay, _widgetSettings, cancellationToken);
+					_hostHandle = host;
+					_interactiveHostHandle = _hostLocator.InteractiveHostHandle;
+				}
+			}
+			UpdateTimers();
 		}
 		finally
 		{

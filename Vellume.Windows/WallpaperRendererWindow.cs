@@ -313,7 +313,7 @@ internal sealed class WallpaperRendererWindow : IWallpaperRenderer
         }
     }
 
-    Task IWallpaperRenderer.AttachToAsync(
+    async Task IWallpaperRenderer.AttachToAsync(
         nint hostHandle,
         DisplayInfo display,
         bool raisedDesktop,
@@ -322,13 +322,40 @@ internal sealed class WallpaperRendererWindow : IWallpaperRenderer
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var imageNeedsResize =
+            _backend == WallpaperRenderBackend.NativeImage &&
+            (_width != display.Width || _height != display.Height ||
+             !NativeMethods.IsWindow(_handle));
         AttachTo(
             hostHandle,
             display,
             raisedDesktop,
             shellViewHandle,
             backgroundWorkerHandle);
-        return Task.CompletedTask;
+        if (imageNeedsResize &&
+            !string.IsNullOrWhiteSpace(_nativeSourcePath))
+        {
+            var sourcePath = _nativeSourcePath;
+            var options = _playbackOptions.Copy();
+            var bitmap = await Task.Run(
+                () => NativeWallpaperImageRenderer.Render(
+                    sourcePath, display.Width, display.Height, options),
+                cancellationToken);
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                SetNativeBitmap(bitmap);
+                bitmap = nint.Zero;
+            }
+            finally
+            {
+                if (bitmap != nint.Zero)
+                {
+                    NativeMethods.DeleteObject(bitmap);
+                }
+            }
+        }
     }
 
     public async Task InitializeAndNavigateAsync(

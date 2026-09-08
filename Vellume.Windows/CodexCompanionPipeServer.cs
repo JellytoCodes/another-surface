@@ -18,6 +18,7 @@ internal sealed class CodexCompanionPipeServer : IAsyncDisposable
     public const string PipeName = "Vellume.Codex.Status.v1";
 
     private const int MaximumMessageLength = 64 * 1024;
+    private const int MaximumStatusReplaceAttempts = 4;
     private readonly string _statusPath;
     private readonly IAppLogger _logger;
     private readonly string _pipeName;
@@ -214,18 +215,22 @@ internal sealed class CodexCompanionPipeServer : IAsyncDisposable
             : null;
     }
 
-    private async Task PersistAsync(
+    internal async Task PersistAsync(
         string message,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<string, string>? replaceFile = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var directory = Path.GetDirectoryName(_statusPath);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
         }
 
-        var temporaryPath =
-            $"{_statusPath}.{Guid.NewGuid():N}.tmp";
+        // One latest-snapshot recovery slot, not a replay queue. A later
+        // event supersedes it; successful publication consumes it.
+        var temporaryPath = $"{_statusPath}.pending";
+        var messageWritten = false;
         try
         {
             var mergedMessage = await MergeRecentProjectsAsync(
@@ -236,19 +241,65 @@ internal sealed class CodexCompanionPipeServer : IAsyncDisposable
                 mergedMessage,
                 new UTF8Encoding(false),
                 cancellationToken);
-            File.Move(
+            messageWritten = true;
+            await ReplaceStatusFileAsync(
                 temporaryPath,
                 _statusPath,
-                overwrite: true);
+                cancellationToken,
+                replaceFile);
+        }
+        catch (Exception exception) when (
+            messageWritten && exception is not OperationCanceledException)
+        {
+            var reason = IsTransientStatusFileFailure(exception)
+                ? $"일시적 파일 접근 오류가 {MaximumStatusReplaceAttempts}회 시도 후에도 지속됩니다."
+                : "재시도 대상이 아닌 파일 저장 오류입니다.";
+            await _logger.ErrorAsync(
+                $"Codex 상태를 게시하지 못했습니다. {reason} " +
+                $"최신 메시지 복구 파일: {temporaryPath}",
+                exception);
+            throw;
         }
         finally
         {
-            if (File.Exists(temporaryPath))
+            if (!messageWritten && File.Exists(temporaryPath))
             {
                 File.Delete(temporaryPath);
             }
         }
     }
+
+    internal static async Task ReplaceStatusFileAsync(
+        string temporaryPath,
+        string statusPath,
+        CancellationToken cancellationToken,
+        Action<string, string>? replaceFile = null)
+    {
+        replaceFile ??= static (source, destination) =>
+            File.Move(source, destination, overwrite: true);
+        for (var attempt = 1; ; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                replaceFile(temporaryPath, statusPath);
+                return;
+            }
+            catch (Exception exception) when (
+                attempt < MaximumStatusReplaceAttempts &&
+                IsTransientStatusFileFailure(exception))
+            {
+                await Task.Delay(
+                    TimeSpan.FromMilliseconds(50 * (1 << (attempt - 1))),
+                    cancellationToken);
+            }
+        }
+    }
+
+    private static bool IsTransientStatusFileFailure(Exception exception)
+        => exception is UnauthorizedAccessException ||
+           exception is IOException &&
+           (exception.HResult & 0xffff) is 5 or 32 or 33;
 
     private async Task<string> MergeRecentProjectsAsync(
         string message,

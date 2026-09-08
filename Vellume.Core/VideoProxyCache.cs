@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Vellume.Core;
 
@@ -9,6 +10,11 @@ public sealed record VideoPlaybackPreparation(
     bool UsedProxy,
     bool GeneratedProxy,
     string Detail);
+
+public sealed record VideoCacheCleanupResult(
+    int RemovedFiles,
+    long RemovedBytes,
+    long RetainedBytes);
 
 public sealed record VideoStreamMetadata(
     string Codec,
@@ -31,6 +37,8 @@ public sealed record VideoStreamMetadata(
 public sealed class VideoProxyCache
 {
     public const int MaximumFramesPerSecond = 30;
+    public const long DefaultMaximumCacheBytes = 2L * 1024 * 1024 * 1024;
+    public static readonly TimeSpan DefaultUnusedCacheAge = TimeSpan.FromDays(30);
     private const string CacheDirectoryName = ".vellume-cache";
     private const string ProxyRevision = "v2";
     private readonly string? _ffmpegPath;
@@ -87,6 +95,7 @@ public sealed class VideoProxyCache
             $"video-{maximumWidth}x{maximumHeight}-{MaximumFramesPerSecond}fps-h264-{ProxyRevision}.mp4");
         if (IsFreshProxy(sourcePath, proxyPath))
         {
+            TouchProxy(proxyPath);
             playback.SourcePath = proxyPath;
             return new(
                 playback,
@@ -172,7 +181,7 @@ public sealed class VideoProxyCache
             }
 
             File.Move(temporaryPath, proxyPath, overwrite: true);
-            DeleteSupersededProxies(cacheDirectory, proxyPath);
+            TouchProxy(proxyPath);
             playback.SourcePath = proxyPath;
             return new(
                 playback,
@@ -506,40 +515,105 @@ public sealed class VideoProxyCache
         }
     }
 
-    private static void DeleteSupersededProxies(
-        string cacheDirectory,
-        string retainedPath)
+    private static void TouchProxy(string path)
     {
         try
         {
-            var retainedName = Path.GetFileNameWithoutExtension(retainedPath);
-            var revisionSeparator = retainedName.LastIndexOf(
-                "-v",
-                StringComparison.OrdinalIgnoreCase);
-            if (revisionSeparator < 0)
+            // Windows may disable automatic access timestamps; track reuse explicitly.
+            File.SetLastAccessTimeUtc(path, DateTime.UtcNow);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Cache accounting must never prevent playback.
+        }
+    }
+
+    internal static VideoCacheCleanupResult Cleanup(
+        string libraryDirectory,
+        IReadOnlyCollection<string> protectedPaths,
+        long maximumBytes,
+        TimeSpan maximumUnusedAge,
+        CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(maximumBytes);
+        if (maximumUnusedAge < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maximumUnusedAge));
+        }
+        var root = Path.GetFullPath(libraryDirectory);
+        var protectedFiles = protectedPaths.Select(Path.GetFullPath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var candidates = new List<FileInfo>();
+        if (!Directory.Exists(root) || IsReparsePoint(root))
+        {
+            return new(0, 0, 0);
+        }
+        foreach (var itemDirectory in Directory.EnumerateDirectories(root))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!Guid.TryParseExact(Path.GetFileName(itemDirectory), "N", out _) ||
+                IsReparsePoint(itemDirectory))
             {
-                return;
+                continue;
             }
-            var familyPattern =
-                retainedName[..revisionSeparator] + "-v*.mp4";
-            foreach (var file in Directory.EnumerateFiles(
-                         cacheDirectory,
-                         familyPattern,
-                         SearchOption.TopDirectoryOnly))
+            var cacheDirectory = Path.Combine(itemDirectory, CacheDirectoryName);
+            if (!Directory.Exists(cacheDirectory) || IsReparsePoint(cacheDirectory))
             {
-                if (!Path.GetFullPath(file).Equals(
-                        Path.GetFullPath(retainedPath),
-                        StringComparison.OrdinalIgnoreCase))
+                continue;
+            }
+            foreach (var path in Directory.EnumerateFiles(cacheDirectory, "*.mp4"))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                // Only generated complete proxies, never original media, partial files,
+                // arbitrary nested content or linked files/directories.
+                if (Regex.IsMatch(Path.GetFileName(path),
+                        @"^video-\d+x\d+-\d+fps-h264-v\d+\.mp4$",
+                        RegexOptions.CultureInvariant) && !IsReparsePoint(path))
                 {
-                    TryDeleteFile(file);
+                    candidates.Add(new FileInfo(path));
                 }
             }
         }
-        catch
+        var retainedBytes = candidates.Sum(file => file.Length);
+        var cutoff = DateTime.UtcNow - maximumUnusedAge;
+        var removedFiles = 0;
+        long removedBytes = 0;
+        foreach (var file in candidates.OrderBy(file =>
+                     file.LastAccessTimeUtc > file.LastWriteTimeUtc
+                         ? file.LastAccessTimeUtc : file.LastWriteTimeUtc))
         {
-            // Old caches are harmless and can be removed by a later run.
+            cancellationToken.ThrowIfCancellationRequested();
+            var lastUsed = file.LastAccessTimeUtc > file.LastWriteTimeUtc
+                ? file.LastAccessTimeUtc : file.LastWriteTimeUtc;
+            if (protectedFiles.Contains(file.FullName) ||
+                (retainedBytes <= maximumBytes && lastUsed >= cutoff))
+            {
+                continue;
+            }
+            try
+            {
+                // Recheck links at the mutation boundary. Delete only this exact file.
+                if (IsReparsePoint(root) || IsReparsePoint(file.Directory!.Parent!.FullName) ||
+                    IsReparsePoint(file.Directory.FullName) || IsReparsePoint(file.FullName))
+                {
+                    continue;
+                }
+                var length = file.Length;
+                File.Delete(file.FullName);
+                retainedBytes -= length;
+                removedBytes += length;
+                removedFiles++;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // A renderer or encoder may still own the file. Leave it for a later run.
+            }
         }
+        return new(removedFiles, removedBytes, retainedBytes);
     }
+
+    private static bool IsReparsePoint(string path)
+        => (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
 
     private sealed record ProcessResult(
         int ExitCode,

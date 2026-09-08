@@ -8,6 +8,26 @@ public sealed class WindowsMonitorService : IMonitorService
 {
     public IReadOnlyList<DisplayInfo> GetDisplays()
     {
+        // GetMonitorInfo is DPI-virtualized for unaware/system-aware callers.
+        // The renderer IPC contract uses physical desktop pixels on all monitors.
+        var previousContext = NativeMethods.SetThreadDpiAwarenessContext(new nint(-4));
+        if (previousContext == nint.Zero)
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(),
+                "모니터의 실제 픽셀 좌표를 조회할 DPI 컨텍스트를 설정하지 못했습니다.");
+        }
+        try
+        {
+            return EnumeratePhysicalDisplays();
+        }
+        finally
+        {
+            NativeMethods.SetThreadDpiAwarenessContext(previousContext);
+        }
+    }
+
+    private static IReadOnlyList<DisplayInfo> EnumeratePhysicalDisplays()
+    {
         var displays = new List<DisplayInfo>();
         NativeMethods.MonitorEnumProc callback = (monitor, _, _, _) =>
         {

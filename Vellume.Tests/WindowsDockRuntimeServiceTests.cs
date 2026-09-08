@@ -4,6 +4,32 @@ namespace Vellume.Tests;
 
 public sealed class WindowsDockRuntimeServiceTests
 {
+    [Fact]
+    public void DockCapture_CancelledRequestDoesNotStartWindowScan()
+    {
+        using var service = new WindowsDockRuntimeService();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        var exception = Assert.Throws<OperationCanceledException>(
+            () => service.Capture(cancellation.Token));
+
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+    }
+
+    [Fact]
+    public void QuickSlotCapture_CancelledRequestDoesNotReadTargets()
+    {
+        using var service = new WindowsQuickSlotRuntimeService();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        var exception = Assert.Throws<OperationCanceledException>(
+            () => service.Capture([], [], cancellation.Token));
+
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+    }
+
     [Theory]
     [InlineData("ApplicationFrameHost")]
     [InlineData("SystemSettings")]

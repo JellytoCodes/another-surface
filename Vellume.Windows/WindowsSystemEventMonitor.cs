@@ -21,6 +21,10 @@ public sealed class WindowsSystemEventMonitor : IDisposable
     private const int ChildIdSelf = 0;
     private const int CsidlBitBucket = 0x000A;
     private const int RecycleBinMessage = 0x8000 + 0x56;
+    private const int WmDisplayChange = 0x007E;
+    private const int WmSettingChange = 0x001A;
+    private const int WmDpiChanged = 0x02E0;
+    private const int SpiSetWorkArea = 0x002F;
     private const int ShellChangeSources = 0x0001 | 0x0002;
     private const int ShellChangeAllEvents = 0x7FFFFFFF;
     private const int WindowStylePopup = unchecked((int)0x80000000);
@@ -40,6 +44,7 @@ public sealed class WindowsSystemEventMonitor : IDisposable
     private int _windowInventoryEventPending;
     private int _desktopShellEventPending;
     private int _recycleBinEventPending;
+    private int _displayConfigurationEventPending;
     private bool _disposed;
 
     public WindowsSystemEventMonitor(Dispatcher dispatcher)
@@ -59,6 +64,7 @@ public sealed class WindowsSystemEventMonitor : IDisposable
     public event EventHandler? WindowInventoryChanged;
     public event EventHandler? DesktopShellChanged;
     public event EventHandler? RecycleBinChanged;
+    public event EventHandler? DisplayConfigurationChanged;
 
     public void Dispose()
     {
@@ -188,6 +194,13 @@ public sealed class WindowsSystemEventMonitor : IDisposable
             QueueEvent(
                 PendingEvent.RecycleBin,
                 RecycleBinChanged);
+        }
+        else if (message is WmDisplayChange or WmDpiChanged ||
+                 message == WmSettingChange && wParam.ToInt64() == SpiSetWorkArea)
+        {
+            QueueEvent(
+                PendingEvent.DisplayConfiguration,
+                DisplayConfigurationChanged);
         }
         else if (_taskbarCreatedMessage != 0 &&
                  message == _taskbarCreatedMessage)
@@ -349,6 +362,8 @@ public sealed class WindowsSystemEventMonitor : IDisposable
                 return ref _windowInventoryEventPending;
             case PendingEvent.DesktopShell:
                 return ref _desktopShellEventPending;
+            case PendingEvent.DisplayConfiguration:
+                return ref _displayConfigurationEventPending;
             default:
                 return ref _recycleBinEventPending;
         }
@@ -377,6 +392,7 @@ public sealed class WindowsSystemEventMonitor : IDisposable
         Foreground,
         WindowInventory,
         DesktopShell,
+        DisplayConfiguration,
         RecycleBin
     }
 

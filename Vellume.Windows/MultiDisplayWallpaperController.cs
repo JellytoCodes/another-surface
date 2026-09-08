@@ -14,7 +14,7 @@ public sealed class MultiDisplayWallpaperController :
 {
     private sealed class SecondarySession
     {
-        public required DisplayInfo Display { get; init; }
+        public required DisplayInfo Display { get; set; }
         public required WallpaperItem Wallpaper { get; init; }
         public required PlaybackOptions Playback { get; set; }
         public required IWallpaperRenderer Renderer { get; set; }
@@ -32,6 +32,8 @@ public sealed class MultiDisplayWallpaperController :
     private readonly Dictionary<string, SecondarySession> _secondarySessions =
         new(StringComparer.OrdinalIgnoreCase);
     private DisplayInfo? _primaryDisplay;
+    private bool _displayRefreshPending;
+    private bool _refreshingDisplays;
     private string? _selectedDisplayId;
     private bool _manualPauseRequested;
     private ApplicationPlaybackAction _automaticAction;
@@ -66,6 +68,8 @@ public sealed class MultiDisplayWallpaperController :
             PrimaryController_QuickSlotLayoutChanged;
         _systemEventMonitor.DesktopShellChanged +=
             SystemEventMonitor_DesktopShellChanged;
+        _systemEventMonitor.DisplayConfigurationChanged +=
+            SystemEventMonitor_DisplayConfigurationChanged;
     }
 
     public WallpaperPlaybackState State { get; private set; }
@@ -84,24 +88,23 @@ public sealed class MultiDisplayWallpaperController :
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        _selectedDisplayId = display.Id;
-
-        if (display.IsPrimary)
-        {
-            _primaryDisplay = display;
-            await _primaryController.ApplyAsync(
-                wallpaper,
-                display,
-                options,
-                widgets,
-                cancellationToken);
-            return;
-        }
-
         await _operationLock.WaitAsync(cancellationToken);
         IWallpaperRenderer? replacement = null;
         try
         {
+            // A queued Apply may carry bounds from before a display-change event.
+            display = _monitorService.GetDisplays().FirstOrDefault(candidate =>
+                candidate.Id.Equals(display.Id, StringComparison.OrdinalIgnoreCase)) ??
+                throw new InvalidOperationException("선택한 모니터의 연결이 해제되었습니다.");
+            _selectedDisplayId = display.Id;
+            if (IsPrimaryDisplay(display.Id))
+            {
+                _primaryDisplay = display;
+                await _primaryController.ApplyAsync(
+                    wallpaper, display, options, widgets, cancellationToken);
+                return;
+            }
+
             WallpaperValidator.DetectKind(wallpaper.SourcePath);
             var hostHandle = FindWallpaperHostOrThrow();
             replacement = WallpaperRendererFactory.Create(
@@ -412,14 +415,9 @@ public sealed class MultiDisplayWallpaperController :
         DisplayInfo? display = null,
         CancellationToken cancellationToken = default)
     {
-        if (display?.IsPrimary == true)
-        {
-            _primaryDisplay = display;
-        }
-
         return _primaryController.UpdateWidgetsAsync(
             widgets,
-            _primaryDisplay ?? TryGetPrimaryDisplay(),
+            TryGetPrimaryDisplay(),
             cancellationToken);
     }
 
@@ -450,6 +448,8 @@ public sealed class MultiDisplayWallpaperController :
 
         _systemEventMonitor.DesktopShellChanged -=
             SystemEventMonitor_DesktopShellChanged;
+        _systemEventMonitor.DisplayConfigurationChanged -=
+            SystemEventMonitor_DisplayConfigurationChanged;
         _primaryController.StateChanged -= PrimaryController_StateChanged;
         _primaryController.AutomaticPlaybackActionChanged -=
             PrimaryController_AutomaticPlaybackActionChanged;
@@ -496,6 +496,123 @@ public sealed class MultiDisplayWallpaperController :
         }
     }
 
+    private async void SystemEventMonitor_DisplayConfigurationChanged(
+        object? sender,
+        EventArgs eventArgs)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+        _displayRefreshPending = true;
+        if (_refreshingDisplays)
+        {
+            return;
+        }
+        _refreshingDisplays = true;
+        try
+        {
+            while (_displayRefreshPending && !_disposed)
+            {
+                _displayRefreshPending = false;
+                await _operationLock.WaitAsync();
+                try
+                {
+                    if (_disposed)
+                    {
+                        return;
+                    }
+                    var displays = _monitorService.GetDisplays();
+                    // Wallpaper ownership stays keyed by display ID even if
+                    // Windows changes which display is primary. Widgets move.
+                    _primaryDisplay = displays.FirstOrDefault(candidate =>
+                        candidate.Id.Equals(_primaryDisplay?.Id,
+                            StringComparison.OrdinalIgnoreCase)) ?? _primaryDisplay;
+                    try
+                    {
+                        await _primaryController.RefreshDisplayGeometryAsync(displays);
+                    }
+                    catch (Exception exception)
+                    {
+                        await _logger.ErrorAsync("기본 렌더러/위젯 크기 갱신에 실패했습니다.", exception);
+                    }
+                    nint host = nint.Zero;
+                    foreach (var session in _secondarySessions.Values)
+                    {
+                        try
+                        {
+                            var display = displays.FirstOrDefault(candidate =>
+                                candidate.Id.Equals(session.Display.Id,
+                                    StringComparison.OrdinalIgnoreCase));
+                            if (display is null)
+                            {
+                                await session.Renderer.CloseSafelyAsync();
+                                continue;
+                            }
+                            if (session.Display.HasSameGeometry(display) &&
+                                session.Renderer.IsAttachedTo(session.HostHandle))
+                            {
+                                continue;
+                            }
+                            if (host == nint.Zero)
+                            {
+                                host = FindWallpaperHostOrThrow();
+                            }
+                            var needsInitialization = !session.Renderer.IsReady;
+                            if (needsInitialization)
+                            {
+                                await session.Renderer.CloseSafelyAsync();
+                                session.Renderer = WallpaperRendererFactory.Create(
+                                    GetRendererDataDirectory(display.Id));
+                            }
+                            await AttachRendererAsync(session.Renderer, host, display,
+                                CancellationToken.None);
+                            if (needsInitialization)
+                            {
+                                await session.Renderer.InitializeAndNavigateAsync(
+                                    session.Wallpaper, session.Playback, CancellationToken.None);
+                                if (_manualPauseRequested || session.IsPaused ||
+                                    _automaticAction != ApplicationPlaybackAction.KeepRunning)
+                                {
+                                    await session.Renderer.PauseAsync();
+                                }
+                            }
+                            session.Display = display;
+                            session.HostHandle = host;
+                        }
+                        catch (Exception exception)
+                        {
+                            await _logger.ErrorAsync(
+                                $"모니터 {session.Display.Id} 크기 갱신에 실패했습니다.", exception);
+                        }
+                    }
+                    await _logger.InfoAsync("Physical display configuration: " +
+                        string.Join("; ", displays.Select(display =>
+                            $"{display.Id}=({display.X},{display.Y}) {display.Width}x{display.Height} primary={display.IsPrimary}")));
+                }
+                finally
+                {
+                    _operationLock.Release();
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            if (!_disposed)
+            {
+                await _logger.ErrorAsync("디스플레이 환경 갱신에 실패했습니다.", exception);
+            }
+        }
+        finally
+        {
+            _refreshingDisplays = false;
+            if (_displayRefreshPending && !_disposed)
+            {
+                SystemEventMonitor_DisplayConfigurationChanged(this, EventArgs.Empty);
+            }
+        }
+    }
+
     private async void SystemEventMonitor_DesktopShellChanged(
         object? sender,
         EventArgs eventArgs)
@@ -507,6 +624,7 @@ public sealed class MultiDisplayWallpaperController :
 
         try
         {
+            var displays = _monitorService.GetDisplays();
             var hostHandle = _hostLocator.FindWallpaperHost();
             if (hostHandle == nint.Zero)
             {
@@ -516,7 +634,15 @@ public sealed class MultiDisplayWallpaperController :
             foreach (var pair in _secondarySessions.ToArray())
             {
                 var session = pair.Value;
-                if (session.Renderer.IsAttachedTo(hostHandle))
+                var latestDisplay = displays.FirstOrDefault(candidate =>
+                    candidate.Id.Equals(session.Display.Id, StringComparison.OrdinalIgnoreCase));
+                if (latestDisplay is null)
+                {
+                    await session.Renderer.CloseSafelyAsync();
+                    continue;
+                }
+                if (session.Display.HasSameGeometry(latestDisplay) &&
+                    session.Renderer.IsAttachedTo(hostHandle))
                 {
                     session.HostHandle = hostHandle;
                     continue;
@@ -527,7 +653,7 @@ public sealed class MultiDisplayWallpaperController :
                     await AttachRendererAsync(
                         session.Renderer,
                         hostHandle,
-                        session.Display,
+                        latestDisplay,
                         CancellationToken.None);
                 }
                 else
@@ -541,7 +667,7 @@ public sealed class MultiDisplayWallpaperController :
                     await AttachRendererAsync(
                         replacement,
                         hostHandle,
-                        session.Display,
+                        latestDisplay,
                         CancellationToken.None);
                     await replacement.InitializeAndNavigateAsync(
                         session.Wallpaper,
@@ -561,6 +687,7 @@ public sealed class MultiDisplayWallpaperController :
                 }
 
                 session.HostHandle = hostHandle;
+                session.Display = latestDisplay;
             }
 
             await _logger.InfoAsync(

@@ -137,6 +137,113 @@ public sealed class VideoProxyCacheTests : IDisposable
             preparation.Wallpaper.SourcePath);
     }
 
+    [Fact]
+    public async Task Cleanup_ProtectsAllActiveDisplaysAndNeverDeletesOriginalsOrUnknownFiles()
+    {
+        var store = new WallpaperLibraryStore(_temporaryDirectory);
+        var first = CreateProxy(Guid.NewGuid(), "video-1920x1080-30fps-h264-v2.mp4", 10, 60);
+        var second = CreateProxy(Guid.NewGuid(), "video-3440x1440-30fps-h264-v2.mp4", 10, 60);
+        var stale = CreateProxy(Guid.NewGuid(), "video-2400x1350-30fps-h264-v2.mp4", 10, 60);
+        var original = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(stale))!, "original.mp4");
+        var partial = Path.Combine(Path.GetDirectoryName(stale)!, ".video-test.partial.mp4");
+        var unknown = Path.Combine(Path.GetDirectoryName(stale)!, "user-video.mp4");
+        var unrelated = Path.Combine(_temporaryDirectory, "not-a-library-item", ".vellume-cache", "video-320x180-30fps-h264-v2.mp4");
+        Directory.CreateDirectory(Path.GetDirectoryName(unrelated)!);
+        foreach (var path in new[] { original, partial, unknown, unrelated })
+        {
+            await File.WriteAllBytesAsync(path, [1, 2, 3]);
+        }
+
+        var result = await store.CleanupVideoCacheAsync(
+            [first.ToUpperInvariant(), second], maximumBytes: 0);
+
+        Assert.Equal(1, result.RemovedFiles);
+        Assert.Equal(10, result.RemovedBytes);
+        Assert.Equal(20, result.RetainedBytes); // The budget is soft for active renderers.
+        Assert.False(File.Exists(stale));
+        foreach (var path in new[] { first, second, original, partial, unknown, unrelated })
+        {
+            Assert.True(File.Exists(path), path);
+        }
+    }
+
+    [Fact]
+    public async Task Cleanup_EvictsLeastRecentlyUsedVariantsToMeetBudget()
+    {
+        var itemId = Guid.NewGuid();
+        var reused = CreateProxy(itemId, "video-1920x1080-30fps-h264-v2.mp4", 10, 3);
+        var unused = CreateProxy(itemId, "video-2752x1152-30fps-h264-v2.mp4", 10, 2);
+        var sourcePath = Path.Combine(_temporaryDirectory, itemId.ToString("N"), "original.mp4");
+        await File.WriteAllBytesAsync(sourcePath, [1]);
+        File.SetLastWriteTimeUtc(sourcePath, DateTime.UtcNow.AddDays(-10));
+        var store = new WallpaperLibraryStore(_temporaryDirectory);
+        var preparation = await store.PrepareForPlaybackAsync(new WallpaperItem
+        {
+            Id = itemId, SourcePath = sourcePath, IsManaged = true, Kind = WallpaperKind.Video
+        }, 1920, 1080);
+        Assert.True(preparation.UsedProxy);
+
+        var result = await store.CleanupVideoCacheAsync([], maximumBytes: 10);
+
+        Assert.Equal(1, result.RemovedFiles);
+        Assert.Equal(10, result.RetainedBytes);
+        Assert.True(File.Exists(reused));
+        Assert.False(File.Exists(unused));
+        Assert.True(File.Exists(sourcePath));
+    }
+
+    [Fact]
+    public async Task Cleanup_RemovesExpiredCacheEvenBelowBudget()
+    {
+        var expired = CreateProxy(Guid.NewGuid(), "video-1920x1080-30fps-h264-v2.mp4", 10, 40);
+        var recent = CreateProxy(Guid.NewGuid(), "video-1920x1080-30fps-h264-v2.mp4", 10, 1);
+        var store = new WallpaperLibraryStore(_temporaryDirectory);
+
+        var result = await store.CleanupVideoCacheAsync([]);
+
+        Assert.Equal(1, result.RemovedFiles);
+        Assert.False(File.Exists(expired));
+        Assert.True(File.Exists(recent));
+    }
+
+    [Fact]
+    public async Task Cleanup_LeavesFilesHeldByRendererAlone()
+    {
+        var held = CreateProxy(Guid.NewGuid(), "video-1920x1080-30fps-h264-v2.mp4", 10, 40);
+        var store = new WallpaperLibraryStore(_temporaryDirectory);
+        using var stream = new FileStream(held, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        var result = await store.CleanupVideoCacheAsync([], maximumBytes: 0);
+
+        Assert.Equal(0, result.RemovedFiles);
+        Assert.Equal(10, result.RetainedBytes);
+        Assert.True(File.Exists(held));
+    }
+
+    [Fact]
+    public async Task Cleanup_CancellationLeavesCacheUntouched()
+    {
+        var path = CreateProxy(Guid.NewGuid(), "video-1920x1080-30fps-h264-v2.mp4", 10, 40);
+        var store = new WallpaperLibraryStore(_temporaryDirectory);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.CleanupVideoCacheAsync([], cancellation.Token, maximumBytes: 0));
+        Assert.True(File.Exists(path));
+    }
+
+    private string CreateProxy(Guid itemId, string name, int bytes, int daysSinceUse)
+    {
+        var directory = Path.Combine(_temporaryDirectory, itemId.ToString("N"), ".vellume-cache");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, name);
+        File.WriteAllBytes(path, new byte[bytes]);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-daysSinceUse));
+        File.SetLastAccessTimeUtc(path, DateTime.UtcNow.AddDays(-daysSinceUse));
+        return path;
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_temporaryDirectory))

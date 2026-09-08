@@ -130,6 +130,20 @@ public sealed class WallpaperLibraryStore
         }
     }
 
+    public Task<VideoCacheCleanupResult> CleanupVideoCacheAsync(
+        IReadOnlyCollection<string> protectedPaths,
+        CancellationToken cancellationToken = default,
+        long maximumBytes = VideoProxyCache.DefaultMaximumCacheBytes,
+        TimeSpan? maximumUnusedAge = null)
+    {
+        ArgumentNullException.ThrowIfNull(protectedPaths);
+        var snapshot = protectedPaths.ToArray();
+        return Task.Run(() => VideoProxyCache.Cleanup(
+            _libraryDirectory, snapshot, maximumBytes,
+            maximumUnusedAge ?? VideoProxyCache.DefaultUnusedCacheAge,
+            cancellationToken), cancellationToken);
+    }
+
     public async Task<bool> DeleteAsync(
         WallpaperItem wallpaper,
         CancellationToken cancellationToken = default)

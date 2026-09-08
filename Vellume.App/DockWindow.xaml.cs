@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -28,6 +29,7 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
     }
 
     private const int WmHotkey = 0x0312;
+    private const int WmDpiChanged = 0x02E0;
     private const int DockHotkeyId = 0x56D0;
     private const int DwmWindowCornerPreference = 33;
     private const int DwmWindowCornerRound = 2;
@@ -40,6 +42,7 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
     private readonly WindowsDockRuntimeService _dockRuntime = new();
     private readonly WindowsQuickSlotRuntimeService _quickSlotRuntime = new();
     private readonly WindowsIconService _iconService = new();
+    private readonly WindowsMonitorService _monitorService = new();
     private readonly WindowsSystemEventMonitor _systemEventMonitor;
     private readonly DispatcherTimer _refreshTimer;
     private readonly DispatcherTimer _runtimeRefreshDebounceTimer;
@@ -53,6 +56,13 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
     private bool _dragOccurred;
     private bool _dockHotkeyRegistered;
     private bool _fullRuntimeRefreshPending;
+    private bool _runtimeRefreshInProgress;
+    private bool _fullRuntimeCapturePending;
+    private bool _recycleBinRefreshPending;
+    private bool _recycleBinHasItems;
+    private int _runtimeSettingsGeneration;
+    private CancellationTokenSource? _runtimeCaptureCancellation;
+    private Task? _runtimeCaptureTask;
 
     private static readonly HashSet<string> DevelopmentDockProcesses =
         new(StringComparer.OrdinalIgnoreCase)
@@ -118,7 +128,10 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
             SystemEventMonitor_ForegroundWindowChanged;
         _systemEventMonitor.RecycleBinChanged +=
             SystemEventMonitor_RecycleBinChanged;
+        _systemEventMonitor.DisplayConfigurationChanged +=
+            SystemEventMonitor_DisplayConfigurationChanged;
         SourceInitialized += Window_SourceInitialized;
+        IsVisibleChanged += Window_IsVisibleChanged;
         RebuildPinnedItems();
     }
 
@@ -182,6 +195,7 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
         }
 
         _disposed = true;
+        InvalidateRuntimeCapture(clearPending: true);
         _refreshTimer.Stop();
         _refreshTimer.Tick -= RefreshTimer_Tick;
         _runtimeRefreshDebounceTimer.Stop();
@@ -192,8 +206,25 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
             SystemEventMonitor_ForegroundWindowChanged;
         _systemEventMonitor.RecycleBinChanged -=
             SystemEventMonitor_RecycleBinChanged;
-        _quickSlotRuntime.Dispose();
-        _dockRuntime.Dispose();
+        _systemEventMonitor.DisplayConfigurationChanged -=
+            SystemEventMonitor_DisplayConfigurationChanged;
+        IsVisibleChanged -= Window_IsVisibleChanged;
+        // Unregister HWND hooks immediately, but leave capture-owned caches
+        // alive until the current worker exits. Never wait on the UI thread.
+        _quickSlotRuntime.Detach();
+        _dockRuntime.Attach(nint.Zero);
+        if (_runtimeCaptureTask is { IsCompleted: false } captureTask)
+        {
+            _ = captureTask.ContinueWith(
+                _ => DisposeRuntimeServices(),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+        else
+        {
+            DisposeRuntimeServices();
+        }
         if (_dockHotkeyRegistered &&
             _windowSource is not null)
         {
@@ -207,11 +238,49 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
         Close();
     }
 
+    private void DisposeRuntimeServices()
+    {
+        _quickSlotRuntime.Dispose();
+        _dockRuntime.Dispose();
+    }
+
+    private void Window_IsVisibleChanged(
+        object sender,
+        DependencyPropertyChangedEventArgs eventArgs)
+    {
+        if (!IsVisible)
+        {
+            _refreshTimer.Stop();
+            InvalidateRuntimeCapture(clearPending: true);
+        }
+        else if (!_disposed && _settings.Dock.IsEnabled)
+        {
+            RefreshRuntimeState();
+            _refreshTimer.Start();
+        }
+    }
+
+    private void InvalidateRuntimeCapture(bool clearPending = false)
+    {
+        _runtimeSettingsGeneration++;
+        _runtimeCaptureCancellation?.Cancel();
+        if (clearPending)
+        {
+            _fullRuntimeCapturePending = false;
+            _recycleBinRefreshPending = false;
+            _fullRuntimeRefreshPending = false;
+            _runtimeRefreshDebounceTimer.Stop();
+        }
+    }
+
     private void Window_Loaded(object sender, RoutedEventArgs eventArgs)
     {
         TileSize = _settings.Dock.Copy().IconSize + 4;
         PositionDock();
-        RefreshRuntimeState();
+        if (!_runtimeRefreshInProgress)
+        {
+            RefreshRuntimeState();
+        }
         if (_settings.Dock.IsEnabled)
         {
             _refreshTimer.Start();
@@ -274,6 +343,13 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
         nint lParam,
         ref bool handled)
     {
+        if (message == WmDpiChanged)
+        {
+            // Let WPF adopt its new scale before calculating DIP coordinates.
+            _ = Dispatcher.BeginInvoke(
+                DispatcherPriority.Background,
+                new Action(PositionDock));
+        }
         if (message == WmHotkey &&
             wParam.ToInt32() == DockHotkeyId)
         {
@@ -331,19 +407,15 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
         EventArgs eventArgs)
         => QueueRuntimeRefresh(fullRefresh: false);
 
+    private void SystemEventMonitor_DisplayConfigurationChanged(
+        object? sender,
+        EventArgs eventArgs)
+        => PositionDock();
+
     private void SystemEventMonitor_RecycleBinChanged(
         object? sender,
         EventArgs eventArgs)
-    {
-        if (!Dispatcher.CheckAccess())
-        {
-            _ = Dispatcher.BeginInvoke(
-                DispatcherPriority.Background,
-                new Action(RefreshRecycleBinState));
-            return;
-        }
-        RefreshRecycleBinState();
-    }
+        => RequestRuntimeCapture(fullRefresh: false);
 
     private void QueueRuntimeRefresh(bool fullRefresh = true)
     {
@@ -357,6 +429,11 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
             Dispatcher.BeginInvoke(
                 DispatcherPriority.Background,
                 new Action(() => QueueRuntimeRefresh(fullRefresh)));
+            return;
+        }
+
+        if (!IsVisible || !_settings.Dock.IsEnabled)
+        {
             return;
         }
 
@@ -383,20 +460,165 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
     }
 
     private void RefreshRuntimeState()
+        => RequestRuntimeCapture(fullRefresh: true);
+
+    private void RequestRuntimeCapture(bool fullRefresh)
     {
-        if (_disposed || !_settings.Dock.IsEnabled)
+        if (_disposed)
         {
             return;
         }
 
-        var runningApplications = _dockRuntime.Capture();
-        RefreshPinnedRuntimeState(runningApplications);
-        RefreshRunningItems(runningApplications);
+        if (!Dispatcher.CheckAccess())
+        {
+            _ = Dispatcher.BeginInvoke(
+                DispatcherPriority.Background,
+                new Action(() => RequestRuntimeCapture(fullRefresh)));
+            return;
+        }
+        if (!IsVisible || !_settings.Dock.IsEnabled)
+        {
+            return;
+        }
+
+        _fullRuntimeCapturePending |= fullRefresh;
+        _recycleBinRefreshPending = true;
+        if (!_runtimeRefreshInProgress)
+        {
+            _ = RefreshRuntimeStateAsync();
+        }
+    }
+
+    private async Task RefreshRuntimeStateAsync()
+    {
+        _runtimeRefreshInProgress = true;
+        try
+        {
+            // Coalesce notifications during a scan into one follow-up scan.
+            // Settings and collections are only read or applied on Dispatcher.
+            while (!_disposed && IsVisible && _settings.Dock.IsEnabled &&
+                   (_fullRuntimeCapturePending || _recycleBinRefreshPending))
+            {
+                var fullRefresh = _fullRuntimeCapturePending;
+                _fullRuntimeCapturePending = false;
+                _recycleBinRefreshPending = false;
+                var generation = _runtimeSettingsGeneration;
+                var quickSlots = _settings.Widgets.QuickSlots
+                    .Where(item => item.ShowInDock)
+                    .Select(item => item.Copy())
+                    .ToArray();
+                var systemShortcuts = _settings.Widgets.SystemShortcuts
+                    .Where(item => item.ShowInDock)
+                    .Select(item => item.Copy())
+                    .ToArray();
+                var showRunningApplications = _settings.Dock.ShowRunningApplications;
+                var pinnedApplicationKeys = PinnedItems
+                    .Select(item => ExecutablePathIdentity.GetCanonicalExecutablePath(
+                        item.ExecutablePath))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var explorerIsPinned = systemShortcuts.Any(item =>
+                    item.Kind is SystemShortcutKind.FileExplorer or
+                        SystemShortcutKind.ThisPc);
+                using var cancellation = new CancellationTokenSource();
+                _runtimeCaptureCancellation = cancellation;
+                try
+                {
+                    var captureTask = Task.Run(() =>
+                    {
+                        var started = Stopwatch.GetTimestamp();
+                        var token = cancellation.Token;
+                        token.ThrowIfCancellationRequested();
+                        var applications = fullRefresh
+                            ? _dockRuntime.Capture(token)
+                            : Array.Empty<DockApplicationSnapshot>();
+                        var quickSlotSnapshot = fullRefresh
+                            ? _quickSlotRuntime.Capture(
+                                quickSlots, systemShortcuts, token)
+                            : null;
+                        token.ThrowIfCancellationRequested();
+                        var hasItems = _systemShortcutService.RecycleBinHasItems();
+                        token.ThrowIfCancellationRequested();
+                        var recycleBinIconPath = systemShortcuts
+                            .FirstOrDefault(item => item.Kind ==
+                                SystemShortcutKind.RecycleBin)?.CustomIconPath;
+                        var recycleBinIcon = recycleBinIconPath is null
+                            ? null
+                            : _iconService.GetIcon(
+                                SystemShortcutSetting.GetDefaultTargetPath(
+                                    SystemShortcutKind.RecycleBin),
+                                recycleBinIconPath,
+                                SystemShortcutKind.RecycleBin,
+                                hasItems);
+                        var icons = new Dictionary<string, ImageSource?>(
+                            StringComparer.OrdinalIgnoreCase);
+                        foreach (var application in applications)
+                        {
+                            token.ThrowIfCancellationRequested();
+                            if (!showRunningApplications ||
+                                pinnedApplicationKeys.Contains(application.Key) ||
+                                explorerIsPinned &&
+                                WindowsDockRuntimeService.IsExplorerExecutable(
+                                    application.ExecutablePath))
+                            {
+                                continue;
+                            }
+                            icons[application.Key] =
+                                _iconService.GetIcon(application.ExecutablePath);
+                        }
+                        token.ThrowIfCancellationRequested();
+                        LocalPerformanceDiagnostics.Record(
+                            fullRefresh ? "dock.runtime-capture" : "dock.recycle-capture",
+                            Stopwatch.GetElapsedTime(started));
+                        return (applications, quickSlotSnapshot, hasItems,
+                            recycleBinIcon, icons);
+                    }, cancellation.Token);
+                    _runtimeCaptureTask = captureTask;
+                    var snapshot = await captureTask;
+                    if (_disposed || !IsVisible || !_settings.Dock.IsEnabled ||
+                        generation != _runtimeSettingsGeneration)
+                    {
+                        continue;
+                    }
+
+                    var applyStarted = Stopwatch.GetTimestamp();
+                    ApplyRecycleBinState(snapshot.hasItems, snapshot.recycleBinIcon);
+                    if (snapshot.quickSlotSnapshot is not null)
+                    {
+                        RefreshPinnedRuntimeState(
+                            snapshot.applications,
+                            snapshot.quickSlotSnapshot);
+                        RefreshRunningItems(snapshot.applications, snapshot.icons);
+                        // Activation may have changed while EnumWindows ran.
+                        RefreshForegroundState();
+                    }
+                    LocalPerformanceDiagnostics.Record(
+                        "dock.runtime-apply",
+                        Stopwatch.GetElapsedTime(applyStarted));
+                }
+                catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+                {
+                    // Settings/visibility changes invalidate the old snapshot.
+                }
+                catch (Exception exception)
+                {
+                    _ = _logger.ErrorAsync("Dock 실행 상태를 갱신하지 못했습니다.", exception);
+                }
+                finally
+                {
+                    _runtimeCaptureTask = null;
+                    _runtimeCaptureCancellation = null;
+                }
+            }
+        }
+        finally
+        {
+            _runtimeRefreshInProgress = false;
+        }
     }
 
     private void RefreshForegroundState()
     {
-        if (_disposed || !_settings.Dock.IsEnabled)
+        if (_disposed || !IsVisible || !_settings.Dock.IsEnabled)
         {
             return;
         }
@@ -421,14 +643,9 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
         }
     }
 
-    private void RefreshRecycleBinState()
+    private void ApplyRecycleBinState(bool hasItems, ImageSource? icon)
     {
-        if (_disposed || !_settings.Dock.IsEnabled)
-        {
-            return;
-        }
-
-        var hasItems = _systemShortcutService.RecycleBinHasItems();
+        _recycleBinHasItems = hasItems;
         foreach (var item in PinnedItems.Where(item =>
                      item.SystemKind == SystemShortcutKind.RecycleBin))
         {
@@ -437,17 +654,13 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
                 continue;
             }
             item.DynamicState = hasItems;
-            item.Icon = _iconService.GetIcon(
-                SystemShortcutSetting.GetDefaultTargetPath(
-                    SystemShortcutKind.RecycleBin),
-                item.SystemShortcut?.CustomIconPath ?? string.Empty,
-                SystemShortcutKind.RecycleBin,
-                hasItems);
+            item.Icon = icon;
         }
     }
 
     private void RebuildPinnedItems()
     {
+        InvalidateRuntimeCapture();
         var sections = Enum.GetValues<DockSection>()
             .ToDictionary(
                 section => section,
@@ -465,7 +678,7 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
                 SystemShortcutSetting.GetDefaultTargetPath(system.Kind);
             var dynamicState =
                 system.Kind == SystemShortcutKind.RecycleBin &&
-                _systemShortcutService.RecycleBinHasItems();
+                _recycleBinHasItems;
             sections[DockSection.System].Add(
                 DockItemViewModel.CreateSystem(
                     system,
@@ -564,14 +777,9 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
     }
 
     private void RefreshPinnedRuntimeState(
-        IReadOnlyList<DockApplicationSnapshot>? runningApplications = null)
+        IReadOnlyList<DockApplicationSnapshot> runningApplications,
+        QuickSlotRuntimeSnapshot snapshot)
     {
-        runningApplications ??= _dockRuntime.Capture();
-        var snapshot = _quickSlotRuntime.Capture(
-            _settings.Widgets.QuickSlots,
-            _settings.Widgets.SystemShortcuts);
-        var recycleBinHasItems =
-            _systemShortcutService.RecycleBinHasItems();
         foreach (var item in PinnedItems)
         {
             var runningApplication = FindRunningApplication(
@@ -603,23 +811,13 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
                         systemState.HasAttention ||
                         _dockRuntime.HasAttention(item.ExecutablePath));
                 }
-
-                if (kind == SystemShortcutKind.RecycleBin &&
-                    item.DynamicState != recycleBinHasItems)
-                {
-                    item.DynamicState = recycleBinHasItems;
-                    item.Icon = _iconService.GetIcon(
-                        SystemShortcutSetting.GetDefaultTargetPath(kind),
-                        item.SystemShortcut?.CustomIconPath ?? string.Empty,
-                        kind,
-                        recycleBinHasItems);
-                }
             }
         }
     }
 
     private void RefreshRunningItems(
-        IReadOnlyList<DockApplicationSnapshot>? runningApplications = null)
+        IReadOnlyList<DockApplicationSnapshot> runningApplications,
+        IReadOnlyDictionary<string, ImageSource?> icons)
     {
         if (!_settings.Dock.ShowRunningApplications)
         {
@@ -641,7 +839,6 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
             item.SystemKind is
                 SystemShortcutKind.FileExplorer or
                 SystemShortcutKind.ThisPc);
-        runningApplications ??= _dockRuntime.Capture();
         var candidates = runningApplications
             .Where(item =>
                 !explorerIsPinned ||
@@ -653,7 +850,7 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
                     item.ExecutablePath)))
             .Select(item => DockItemViewModel.CreateRunning(
                 item,
-                _iconService.GetIcon(item.ExecutablePath)))
+                icons.GetValueOrDefault(item.Key)))
             .ToList();
         var hadRunningItems = RunningItems.Count > 0;
         ApplyDiff(RunningItems, candidates);
@@ -1468,19 +1665,35 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
 
     private void PositionDock()
     {
-        if (!IsLoaded || ActualWidth <= 0 || ActualHeight <= 0)
+        if (_disposed || !IsLoaded || ActualWidth <= 0 || ActualHeight <= 0)
         {
             return;
         }
 
-        Left = Math.Max(
-            0,
-            (SystemParameters.PrimaryScreenWidth - ActualWidth) / 2);
-        Top = Math.Max(
-            0,
-            SystemParameters.PrimaryScreenHeight -
-            ActualHeight -
-            _settings.Dock.Copy().BottomMargin);
+        try
+        {
+            var primary = _monitorService.GetDisplays()
+                .FirstOrDefault(display => display.IsPrimary);
+            if (primary is null)
+            {
+                return;
+            }
+
+            // Monitor bounds are physical pixels; WPF window coordinates and
+            // ActualWidth/Height are device-independent pixels (DIPs).
+            var dpi = VisualTreeHelper.GetDpi(this);
+            var left = primary.X / dpi.DpiScaleX;
+            var top = primary.Y / dpi.DpiScaleY;
+            Left = left + Math.Max(0,
+                (primary.Width / dpi.DpiScaleX - ActualWidth) / 2);
+            Top = top + Math.Max(0,
+                primary.Height / dpi.DpiScaleY - ActualHeight -
+                _settings.Dock.Copy().BottomMargin);
+        }
+        catch (Exception exception)
+        {
+            _ = _logger.ErrorAsync("변경된 디스플레이에 Dock을 배치하지 못했습니다.", exception);
+        }
     }
 
     private void OnPropertyChanged(

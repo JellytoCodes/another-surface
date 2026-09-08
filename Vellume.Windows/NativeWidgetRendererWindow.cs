@@ -24,6 +24,15 @@ using Size = System.Windows.Size;
 
 namespace Vellume.Windows;
 
+internal enum CodexCompanionVisualState
+{
+    Ready,
+    Thinking,
+    Working,
+    Complete,
+    Offline
+}
+
 /// <summary>
 /// Coordinates at most one bounded alpha surface per desktop side. Widgets
 /// remain logically independent, but panels sharing a side are rasterized
@@ -56,6 +65,10 @@ internal sealed class NativeWidgetRendererWindow
         Color.FromArgb(158, 43, 132, 168);
     private static readonly FontFamily ReferenceFontFamily =
         new("Bahnschrift, Pretendard, Malgun Gothic");
+    private static readonly Lazy<IReadOnlyDictionary<
+        CodexCompanionVisualState,
+        ImageSource?>> CompanionImages =
+        new(CreateCompanionImages);
     private readonly DispatcherTimer _clockTimer;
     private readonly Dictionary<string, GaugeVisual> _gauges =
         new(StringComparer.Ordinal);
@@ -94,7 +107,9 @@ internal sealed class NativeWidgetRendererWindow
     private StackPanel? _codexProjects;
     private StackPanel? _codexUsageLimits;
     private Ellipse? _codexPulse;
+    private Image? _codexCharacter;
     private TranslateTransform? _codexTranslate;
+    private CodexCompanionVisualState? _lastCodexVisualState;
     private string _lastCodexState = string.Empty;
     private string _lastCodexContentSignature = string.Empty;
 
@@ -1171,19 +1186,22 @@ internal sealed class NativeWidgetRendererWindow
         Canvas.SetTop(usageCard, 274);
         canvas.Children.Add(usageCard);
 
-        var character = new Image
+        var initialVisualState = ResolveCodexCompanionVisualState(
+            _lastCodex);
+        _codexCharacter = new Image
         {
             Width = 225,
             Height = 255,
             Stretch = Stretch.Uniform,
-            Source = LoadCompanionImage(),
+            Source = GetCompanionImage(initialVisualState),
             RenderTransformOrigin = new Point(0.5, 0.5),
             SnapsToDevicePixels = false,
             UseLayoutRounding = false
         };
         RenderOptions.SetBitmapScalingMode(
-            character,
+            _codexCharacter,
             BitmapScalingMode.HighQuality);
+        _lastCodexVisualState = initialVisualState;
         _codexTranslate = new TranslateTransform();
         var transforms = new TransformGroup();
         if (side == WidgetSide.Left)
@@ -1192,12 +1210,12 @@ internal sealed class NativeWidgetRendererWindow
                 new ScaleTransform(-1, 1));
         }
         transforms.Children.Add(_codexTranslate);
-        character.RenderTransform = transforms;
+        _codexCharacter.RenderTransform = transforms;
         Canvas.SetLeft(
-            character,
+            _codexCharacter,
             side == WidgetSide.Left ? 0 : 295);
-        Canvas.SetTop(character, 18);
-        canvas.Children.Add(character);
+        Canvas.SetTop(_codexCharacter, 18);
+        canvas.Children.Add(_codexCharacter);
 
         UpdateCodexProjectRows();
         UpdateCodexUsageRows();
@@ -1634,9 +1652,21 @@ internal sealed class NativeWidgetRendererWindow
         if (_codexHeadline is not null)
         {
             var usage = _lastCodex.Usage;
+            var visualState = ResolveCodexCompanionVisualState(
+                _lastCodex);
+            var visualChanged =
+                _lastCodexVisualState != visualState;
+            if (visualChanged && _codexCharacter is not null)
+            {
+                _codexCharacter.Source =
+                    GetCompanionImage(visualState);
+                _lastCodexVisualState = visualState;
+            }
             var contentSignature = string.Join(
                 "|",
                 _lastCodex.State,
+                _lastCodex.Headline,
+                _lastCodex.Detail,
                 usage.IsAvailable,
                 string.Join(
                     ";",
@@ -1654,10 +1684,11 @@ internal sealed class NativeWidgetRendererWindow
                             $"{project.Id}:{project.State}:" +
                             $"{project.Title}:{project.Phase}:" +
                             $"{project.Workspace}")));
-            var changed = !string.Equals(
-                _lastCodexContentSignature,
-                contentSignature,
-                StringComparison.Ordinal);
+            var changed = visualChanged ||
+                          !string.Equals(
+                              _lastCodexContentSignature,
+                              contentSignature,
+                              StringComparison.Ordinal);
             _codexHeadline.Text =
                 _lastCodex.State is "offline" or "disconnected"
                     ? "CODEX 연결 안 됨"
@@ -1888,7 +1919,9 @@ internal sealed class NativeWidgetRendererWindow
         _codexProjects = null;
         _codexUsageLimits = null;
         _codexPulse = null;
+        _codexCharacter = null;
         _codexTranslate = null;
+        _lastCodexVisualState = null;
         _lastCodexState = string.Empty;
         _lastCodexContentSignature = string.Empty;
     }
@@ -1965,7 +1998,85 @@ internal sealed class NativeWidgetRendererWindow
         return brush;
     }
 
-    private static ImageSource? LoadCompanionImage()
+    internal static CodexCompanionVisualState
+        ResolveCodexCompanionVisualState(
+            CodexCompanionSnapshot snapshot)
+    {
+        var state = snapshot.State.Trim().ToLowerInvariant();
+        if (state is "offline" or "disconnected")
+        {
+            return CodexCompanionVisualState.Offline;
+        }
+        if (state == "complete")
+        {
+            return CodexCompanionVisualState.Complete;
+        }
+        if (state == "thinking" ||
+            ContainsThinkingSignal(snapshot.Headline) ||
+            ContainsThinkingSignal(snapshot.Detail) ||
+            snapshot.Projects.Any(project =>
+                ContainsThinkingSignal(project.Phase)))
+        {
+            return CodexCompanionVisualState.Thinking;
+        }
+        if (state == "working")
+        {
+            return CodexCompanionVisualState.Working;
+        }
+        return CodexCompanionVisualState.Ready;
+    }
+
+    private static bool ContainsThinkingSignal(string value)
+        => value.Contains(
+               "생각",
+               StringComparison.OrdinalIgnoreCase) ||
+           value.Contains(
+               "요청 분석",
+               StringComparison.OrdinalIgnoreCase);
+
+    private static ImageSource? GetCompanionImage(
+        CodexCompanionVisualState state)
+    {
+        var images = CompanionImages.Value;
+        return images.TryGetValue(state, out var image)
+            ? image
+            : images[CodexCompanionVisualState.Ready];
+    }
+
+    private static IReadOnlyDictionary<
+        CodexCompanionVisualState,
+        ImageSource?> CreateCompanionImages()
+    {
+        var ready = LoadCompanionImage(
+            "vellume-companion.png",
+            removeChromaKey: false);
+        return new Dictionary<
+            CodexCompanionVisualState,
+            ImageSource?>
+        {
+            [CodexCompanionVisualState.Ready] = ready,
+            [CodexCompanionVisualState.Thinking] =
+                LoadCompanionImage(
+                    "vellume-companion-thinking.png",
+                    removeChromaKey: true) ?? ready,
+            [CodexCompanionVisualState.Working] =
+                LoadCompanionImage(
+                    "vellume-companion-working.png",
+                    removeChromaKey: true) ?? ready,
+            [CodexCompanionVisualState.Complete] =
+                LoadCompanionImage(
+                    "vellume-companion-complete.png",
+                    removeChromaKey: true) ?? ready,
+            [CodexCompanionVisualState.Offline] =
+                LoadCompanionImage(
+                    "vellume-companion-offline.png",
+                    removeChromaKey: true) ?? ready
+        };
+    }
+
+    private static ImageSource? LoadCompanionImage(
+        string fileName,
+        bool removeChromaKey)
     {
         try
         {
@@ -1973,7 +2084,7 @@ internal sealed class NativeWidgetRendererWindow
                 AppContext.BaseDirectory,
                 "Assets",
                 "Companion",
-                "vellume-companion.png");
+                fileName);
             if (!File.Exists(path))
             {
                 return null;
@@ -1987,11 +2098,71 @@ internal sealed class NativeWidgetRendererWindow
                 UriKind.Absolute);
             bitmap.EndInit();
             bitmap.Freeze();
-            return bitmap;
+            if (!removeChromaKey)
+            {
+                return bitmap;
+            }
+
+            var converted = new FormatConvertedBitmap(
+                bitmap,
+                PixelFormats.Bgra32,
+                null,
+                0);
+            var stride = converted.PixelWidth * 4;
+            var pixels = new byte[
+                stride * converted.PixelHeight];
+            converted.CopyPixels(pixels, stride, 0);
+            ApplyCompanionChromaKey(pixels);
+            var transparent = BitmapSource.Create(
+                converted.PixelWidth,
+                converted.PixelHeight,
+                converted.DpiX,
+                converted.DpiY,
+                PixelFormats.Bgra32,
+                null,
+                pixels,
+                stride);
+            transparent.Freeze();
+            return transparent;
         }
         catch
         {
             return null;
+        }
+    }
+
+    internal static void ApplyCompanionChromaKey(
+        Span<byte> pixels)
+    {
+        const int softEdgeStart = 25;
+        const int fullyTransparent = 85;
+        for (var index = 0;
+             index + 3 < pixels.Length;
+             index += 4)
+        {
+            var blue = pixels[index];
+            var green = pixels[index + 1];
+            var red = pixels[index + 2];
+            var dominantGreen =
+                green - Math.Max(red, blue);
+            if (green < 100 ||
+                dominantGreen <= softEdgeStart)
+            {
+                continue;
+            }
+
+            var alpha = dominantGreen >= fullyTransparent
+                ? 0
+                : (fullyTransparent - dominantGreen) * 255 /
+                  (fullyTransparent - softEdgeStart);
+            pixels[index + 3] = (byte)(
+                pixels[index + 3] * alpha / 255);
+            if (alpha > 0)
+            {
+                pixels[index + 1] = (byte)Math.Min(
+                    green,
+                    Math.Max(red, blue) + 12);
+            }
         }
     }
 

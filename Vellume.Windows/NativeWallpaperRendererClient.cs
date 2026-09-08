@@ -25,6 +25,7 @@ internal sealed class NativeWallpaperRendererClient : IWallpaperRenderer
     private Stream? _output;
     private Task<string>? _stderrTask;
     private NativeRendererState _state = NativeRendererState.Empty;
+    private bool _visible = true;
     private bool _closed;
 
     internal NativeWallpaperRendererClient(string executablePath)
@@ -39,7 +40,8 @@ internal sealed class NativeWallpaperRendererClient : IWallpaperRenderer
             ? "C++ Direct3D 11"
             : _state.Backend;
 
-    public bool IsReady => IsProcessAlive() && _state.IsReady;
+    public bool IsReady =>
+        IsProcessAlive() && _state.IsReady && NativeMethods.IsWindow(Handle);
 
     public string GetAttachmentDiagnostics() =>
         string.IsNullOrWhiteSpace(_state.Diagnostics)
@@ -63,7 +65,7 @@ internal sealed class NativeWallpaperRendererClient : IWallpaperRenderer
                 writer.Write(display.Width);
                 writer.Write(display.Height);
                 writer.Write(raisedDesktop);
-                writer.Write(true);
+                writer.Write(_visible);
                 writer.Write((ushort)0);
                 writer.Write(shellViewHandle.ToInt64());
                 writer.Write(backgroundWorkerHandle.ToInt64());
@@ -91,16 +93,19 @@ internal sealed class NativeWallpaperRendererClient : IWallpaperRenderer
             "C++ Direct3D 렌더러의 진단 캡처는 아직 지원되지 않습니다.");
 
     public bool IsAttachedTo(nint hostHandle)
-        => _state.Handle != 0 &&
-           _state.ParentHandle == unchecked((ulong)hostHandle.ToInt64());
+        => NativeMethods.IsWindow(Handle) &&
+           NativeMethods.GetParent(Handle) == hostHandle;
 
     public Task SetWindowVisibleAsync(
         bool visible,
         CancellationToken cancellationToken)
-        => SendAsync(
+    {
+        _visible = visible;
+        return SendAsync(
             NativeCommand.SetVisible,
             writer => writer.Write(visible),
             cancellationToken);
+    }
 
     public Task PauseAsync()
         => SendAsync(

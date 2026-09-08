@@ -6,3 +6,6 @@ obj/
 *.user
 *.suo
 TestResults/
+
+# Local staging packages, rollback backups and one-off diagnostics.
+/tmp/

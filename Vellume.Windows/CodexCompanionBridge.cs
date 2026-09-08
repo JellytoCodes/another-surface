@@ -42,6 +42,7 @@ internal sealed class CodexCompanionStatusReader : IDisposable
         TimeSpan.FromMinutes(10);
     private static readonly TimeSpan LocalActivityWindow =
         TimeSpan.FromSeconds(6);
+    private const long ProcessRefreshIntervalMilliseconds = 1_000;
     private readonly string _statusPath;
     private readonly FileSystemWatcher? _statusWatcher;
     private readonly FileSystemWatcher? _sessionWatcher;
@@ -50,8 +51,12 @@ internal sealed class CodexCompanionStatusReader : IDisposable
     private readonly SemaphoreSlim _usageLock = new(1, 1);
     private readonly Func<bool> _isCodexRunning;
     private readonly bool _trackCodexProcesses;
+    private readonly Func<Process[]> _getCodexProcesses;
+    private readonly Func<long> _getTickCount;
     private readonly object _processGate = new();
     private readonly Dictionary<int, Process> _trackedProcesses = [];
+    private bool _hasUntrackedRunningProcess;
+    private long? _lastProcessRefreshTick;
     private CodexUsageSnapshot _lastUsage =
         CodexUsageSnapshot.Unavailable();
     private DateTimeOffset _lastUsageAttemptUtc =
@@ -64,12 +69,17 @@ internal sealed class CodexCompanionStatusReader : IDisposable
     public CodexCompanionStatusReader(
         string statusPath,
         Func<bool>? isCodexRunning = null,
-        string? codexHome = null)
+        string? codexHome = null,
+        Func<Process[]>? getCodexProcesses = null,
+        Func<long>? getTickCount = null)
     {
         _statusPath = statusPath;
         _isCodexRunning =
-            isCodexRunning ?? IsCodexDesktopRunning;
+            isCodexRunning ?? IsTrackedCodexRunning;
         _trackCodexProcesses = isCodexRunning is null;
+        _getCodexProcesses = getCodexProcesses ??
+            (() => Process.GetProcessesByName("codex"));
+        _getTickCount = getTickCount ?? (() => Environment.TickCount64);
         _activitySettledTimer = new System.Threading.Timer(
             ActivitySettled,
             null,
@@ -142,7 +152,6 @@ internal sealed class CodexCompanionStatusReader : IDisposable
     public async Task<CodexCompanionSnapshot> ReadAsync(
         CancellationToken cancellationToken)
     {
-        RefreshTrackedCodexProcesses();
         var codexRunning = _isCodexRunning();
         var lastLocalActivity = GetLastLocalActivityUtc();
 
@@ -401,36 +410,12 @@ internal sealed class CodexCompanionStatusReader : IDisposable
             : new DateTimeOffset(ticks, TimeSpan.Zero);
     }
 
-    private static bool IsCodexDesktopRunning()
+    private bool IsTrackedCodexRunning()
     {
-        try
+        RefreshTrackedCodexProcesses();
+        lock (_processGate)
         {
-            var processes = Process.GetProcessesByName("codex");
-            try
-            {
-                return processes.Any(process =>
-                {
-                    try
-                    {
-                        return !process.HasExited;
-                    }
-                    catch
-                    {
-                        return false;
-                    }
-                });
-            }
-            finally
-            {
-                foreach (var process in processes)
-                {
-                    process.Dispose();
-                }
-            }
-        }
-        catch
-        {
-            return false;
+            return _trackedProcesses.Count > 0 || _hasUntrackedRunningProcess;
         }
     }
 
@@ -441,18 +426,29 @@ internal sealed class CodexCompanionStatusReader : IDisposable
             return;
         }
 
-        Process[] processes;
-        try
-        {
-            processes = Process.GetProcessesByName("codex");
-        }
-        catch
-        {
-            return;
-        }
-
         lock (_processGate)
         {
+            var now = _getTickCount();
+            if (_disposed ||
+                _lastProcessRefreshTick is { } previous &&
+                now - previous < ProcessRefreshIntervalMilliseconds)
+            {
+                return;
+            }
+            // Gate the enumeration itself, not just its Changed event.
+            // Session writes and status reads share the same short cache.
+            _lastProcessRefreshTick = now;
+            Process[] processes;
+            try
+            {
+                processes = _getCodexProcesses();
+            }
+            catch
+            {
+                return;
+            }
+
+            _hasUntrackedRunningProcess = false;
             foreach (var process in processes)
             {
                 if (_trackedProcesses.ContainsKey(process.Id))
@@ -476,6 +472,15 @@ internal sealed class CodexCompanionStatusReader : IDisposable
                 }
                 catch
                 {
+                    // Presence must still work when Windows permits the
+                    // query but denies an exit-event subscription.
+                    try
+                    {
+                        _hasUntrackedRunningProcess |= !process.HasExited;
+                    }
+                    catch
+                    {
+                    }
                     process.Dispose();
                 }
             }
@@ -490,16 +495,20 @@ internal sealed class CodexCompanionStatusReader : IDisposable
         {
             lock (_processGate)
             {
+                if (_disposed)
+                {
+                    return;
+                }
                 _trackedProcesses.Remove(process.Id);
+                process.Exited -= CodexProcessOnExited;
+                process.Dispose();
             }
-            process.Exited -= CodexProcessOnExited;
-            process.Dispose();
         }
 
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    private void RecordLocalActivity()
+    internal void RecordLocalActivity()
     {
         var now = DateTimeOffset.UtcNow;
         var previousTicks = Interlocked.Exchange(
@@ -612,6 +621,7 @@ internal sealed class CodexCompanionStatusReader : IDisposable
                 process.Dispose();
             }
             _trackedProcesses.Clear();
+            _hasUntrackedRunningProcess = false;
         }
     }
 

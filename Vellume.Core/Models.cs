@@ -82,6 +82,7 @@ public sealed class DisplayInfo
 {
     public string Id { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
+    // Physical virtual-desktop pixels; never WPF DIPs or system-DPI-scaled bounds.
     public int X { get; init; }
     public int Y { get; init; }
     public int Width { get; init; }
@@ -98,6 +99,12 @@ public sealed class DisplayInfo
                 : "재생 중";
     public string PauseButtonLabel =>
         IsWallpaperPaused ? "재생" : "일시정지";
+
+    public bool HasSameGeometry(DisplayInfo other)
+        => Id.Equals(other.Id, StringComparison.OrdinalIgnoreCase) &&
+           X == other.X && Y == other.Y &&
+           Width == other.Width && Height == other.Height &&
+           IsPrimary == other.IsPrimary;
 
     public override string ToString()
         => $"{Name} · {Width} × {Height}{(IsPrimary ? " · 기본 모니터" : string.Empty)}";

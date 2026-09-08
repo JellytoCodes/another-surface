@@ -4,6 +4,14 @@ namespace Vellume.Windows;
 
 internal static class NativeMethods
 {
+    // Temporarily opts a synchronous monitor query into physical-pixel coordinates.
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern nint SetThreadDpiAwarenessContext(nint context);
+
+    // Verifies that scoped DPI queries restore the caller's awareness context.
+    [DllImport("user32.dll")]
+    internal static extern nint GetThreadDpiAwarenessContext();
+
     internal const uint SpawnWorkerWMessage = 0x052C;
     internal const uint SmtoNormal = 0x0000;
     internal const int GwlStyle = -16;
