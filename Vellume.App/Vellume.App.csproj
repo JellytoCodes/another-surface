@@ -13,6 +13,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <PlatformTarget>x64</PlatformTarget>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\Brand\vellume-app.ico</ApplicationIcon>
     <!-- WPF owns startup; WinForms is used only for tray/dialog integration.
          DPI must be declared before WPF creates HWNDs, not via WinForms startup. -->
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
@@ -32,9 +33,12 @@
     <Content Include="Assets\Companion\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="Assets\Brand\**\*">
+    <Content Include="Assets\Brand\**\*"
+             Exclude="Assets\Brand\vellume-app.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!-- Share the EXE artwork with WPF and NotifyIcon without a loose-file dependency. -->
+    <Resource Include="Assets\Brand\vellume-app.ico" />
     <Content Include="..\Vellume.Renderer.Native\bin\x64\$(Configuration)\Vellume.Renderer.Native.exe"
              Link="Vellume.Renderer.Native.exe"
              Condition="Exists('..\Vellume.Renderer.Native\bin\x64\$(Configuration)\Vellume.Renderer.Native.exe')">

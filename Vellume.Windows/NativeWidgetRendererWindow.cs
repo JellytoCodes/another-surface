@@ -40,6 +40,8 @@ internal enum CodexCompanionVisualState
 /// </summary>
 internal sealed class NativeWidgetRendererWindow
 {
+    private const double ReferenceDisplayWidth = 1920;
+    private const double ReferenceDisplayHeight = 1080;
     private const WidgetSide CodexPanelSide = WidgetSide.Left;
     private static readonly Color MintAccent =
         MikuPalette.Mint;
@@ -182,6 +184,7 @@ internal sealed class NativeWidgetRendererWindow
         DisplayInfo display)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        _ = CalculateResolutionScale(display.Width, display.Height);
         // Retain Explorer only as a lifetime token. Widget pixels are presented
         // by independent WS_POPUP layered windows, never by layered children.
         var compositionParentHandle = hostHandle;
@@ -366,6 +369,8 @@ internal sealed class NativeWidgetRendererWindow
 
     internal string GetAttachmentDiagnostics()
     {
+        var resolutionScale = _width > 0 && _height > 0
+            ? CalculateResolutionScale(_width, _height) : 0;
         var panels = EnumeratePanelHosts()
             .Where(host => host.IsReady)
             .Select(host =>
@@ -394,6 +399,8 @@ internal sealed class NativeWidgetRendererWindow
             $"desktopLifetimeToken=0x{_compositionParentHandle:X}, " +
             $"topLevelPanels=true, " +
             $"fullDisplaySurface=false, " +
+            $"display={_width}x{_height}, " +
+            $"resolutionScale={resolutionScale.ToString("0.###", CultureInfo.InvariantCulture)}, " +
             $"panelCount={PanelHandles.Count}, " +
             $"panels={string.Join(';', panels)}";
     }
@@ -458,43 +465,44 @@ internal sealed class NativeWidgetRendererWindow
             return;
         }
 
+        // DisplayInfo and alpha HWND bounds use physical pixels. Do not multiply
+        // by Windows DPI again: scale the vector layout before rasterization.
+        var scale = CalculateResolutionScale(_width, _height);
         var panels = new List<WidgetPanelPlacement>(4);
         if (_settings.ShowClock)
         {
-            var scale = _width <= 1450 ? 0.82 : 1;
             var prepared = PrepareLayeredPanel(
                 CreateClock(_settings.ClockSide),
                 scale);
             var panelX = CalculatePanelX(
                 _settings.ClockSide,
-                25,
+                25 * scale,
                 prepared.Width);
             _clockPanelVisual = prepared.Visual;
             panels.Add(new WidgetPanelPlacement(
                 _settings.ClockSide,
                 prepared.Visual,
                 panelX,
-                28,
+                ScalePosition(28, scale),
                 prepared.Width,
                 prepared.Height));
         }
 
         if (_settings.ShowSystemInfo)
         {
-            var scale = _width <= 1450 ? 0.92 : 1;
             var prepared = PrepareLayeredPanel(
                 CreateSystemPanel(_settings.SystemInfoSide),
                 scale);
             var panelX = CalculatePanelX(
                 _settings.SystemInfoSide,
-                25,
+                25 * scale,
                 prepared.Width);
             _systemPanelVisual = prepared.Visual;
             panels.Add(new WidgetPanelPlacement(
                 _settings.SystemInfoSide,
                 prepared.Visual,
                 panelX,
-                GetSystemPanelTop(),
+                ScalePosition(GetSystemPanelTop(), scale),
                 prepared.Width,
                 prepared.Height));
         }
@@ -502,20 +510,19 @@ internal sealed class NativeWidgetRendererWindow
         if (_settings.ShowCodexCompanion)
         {
             var side = CodexPanelSide;
-            var scale = _width <= 1450 ? 0.84 : 1;
             var prepared = PrepareLayeredPanel(
                 CreateCodexPanel(side),
                 scale);
             var panelX = CalculatePanelX(
                 side,
-                28,
+                28 * scale,
                 prepared.Width);
             _codexPanelVisual = prepared.Visual;
             panels.Add(new WidgetPanelPlacement(
                 side,
                 prepared.Visual,
                 panelX,
-                28,
+                ScalePosition(28, scale),
                 prepared.Width,
                 prepared.Height));
         }
@@ -627,10 +634,20 @@ internal sealed class NativeWidgetRendererWindow
             _settings.ShowClock &&
             _settings.ClockSide ==
             _settings.SystemInfoSide;
-        return _width <= 1450
-            ? clockOffset ? 330 : 285
-            : clockOffset ? 370 : 330;
+        return clockOffset ? 370 : 330;
     }
+
+    internal static double CalculateResolutionScale(int width, int height)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        // Uniform reference-canvas scaling preserves the FHD design and keeps
+        // it inside wide/portrait displays without stretching text or characters.
+        return Math.Min(width / ReferenceDisplayWidth, height / ReferenceDisplayHeight);
+    }
+
+    private static int ScalePosition(double referencePosition, double scale)
+        => (int)Math.Round(referencePosition * scale);
 
     private static LayeredPanelVisual PrepareLayeredPanel(
         FrameworkElement element,

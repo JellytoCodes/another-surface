@@ -16,6 +16,7 @@ public partial class App : System.Windows.Application
     private const string MutexName = @"Local\Vellume.Desktop.SingleInstance";
     private Mutex? _singleInstanceMutex;
     private Forms.NotifyIcon? _notifyIcon;
+    private System.Drawing.Icon? _trayIcon;
     private Forms.ToolStripMenuItem? _playPauseMenuItem;
     private bool _ownsMutex;
     private bool _isExiting;
@@ -704,6 +705,15 @@ public partial class App : System.Windows.Application
 
     private void CreateTrayIcon()
     {
+        // Clone the chosen small frame so the owned GDI icon outlives the resource stream.
+        using (var stream = GetResourceStream(new Uri(
+                   "pack://application:,,,/Assets/Brand/vellume-app.ico")).Stream)
+        using (var sourceIcon = new System.Drawing.Icon(
+                   stream, Forms.SystemInformation.SmallIconSize))
+        {
+            _trayIcon = (System.Drawing.Icon)sourceIcon.Clone();
+        }
+
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("Vellume 열기", null, (_, _) =>
             Dispatcher.Invoke(ShowMainWindow));
@@ -719,7 +729,7 @@ public partial class App : System.Windows.Application
         _notifyIcon = new Forms.NotifyIcon
         {
             Text = "Vellume",
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = _trayIcon,
             ContextMenuStrip = menu,
             Visible = true
         };
@@ -778,6 +788,8 @@ public partial class App : System.Windows.Application
             _notifyIcon.Dispose();
             _notifyIcon = null;
         }
+        _trayIcon?.Dispose();
+        _trayIcon = null;
 
         if (!_skipSettingsSave &&
             _settings is not null &&
