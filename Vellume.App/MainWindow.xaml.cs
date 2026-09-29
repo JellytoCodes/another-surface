@@ -35,6 +35,10 @@ public partial class MainWindow : Window
     private readonly SemaphoreSlim _wallpaperApplyGate = new(1, 1);
     private readonly SemaphoreSlim _libraryMutationGate = new(1, 1);
     private readonly CancellationTokenSource _libraryLifetime = new();
+    private readonly WallpaperThumbnailService _thumbnails = new(
+        Path.Combine(new AppPaths().RootDirectory, "Thumbnails"));
+    private readonly VideoProxyCache _videoMetadata = new();
+    private string _libraryFilter = "All";
     private CancellationTokenSource? _wallpaperApplyCancellation;
     private HwndSource? _windowSource;
     private bool _initialized;
@@ -418,15 +422,17 @@ public partial class MainWindow : Window
             var playbackWallpaper = wallpaper;
             var generatedProxy = false;
             if (wallpaper.Kind == WallpaperKind.Video &&
-                profile.Playback.UseOptimizedVideo)
+                (profile.Playback.UseOptimizedVideo || wallpaper.HasVideoRange))
             {
                 HomeStatusText.Text =
-                    "디스플레이에 맞는 저전력 영상 캐시를 준비하는 중…";
+                    wallpaper.HasVideoRange ? "선택 구간의 재생 캐시를 준비하는 중… (최초 생성 시 시간이 걸릴 수 있습니다)"
+                        : "디스플레이에 맞는 저전력 영상 캐시를 준비하는 중…";
                 var preparation = await _libraryStore.PrepareForPlaybackAsync(
                     wallpaper,
                     display.Width,
                     display.Height,
-                    cancellation.Token);
+                    cancellation.Token,
+                    optimize: profile.Playback.UseOptimizedVideo);
                 playbackWallpaper = preparation.Wallpaper;
                 generatedProxy = preparation.GeneratedProxy;
                 await _logger.InfoAsync(
@@ -753,6 +759,77 @@ public partial class MainWindow : Window
         }
     }
 
+    private void LibraryFilter_Click(object sender, RoutedEventArgs args)
+    {
+        if (sender is not WpfButton { Tag: string filter } button) return;
+        _libraryFilter = filter;
+        System.Windows.Data.CollectionViewSource.GetDefaultView(Library).Filter = item =>
+            item is WallpaperItem wallpaper &&
+            (_libraryFilter == "All" || wallpaper.Kind.ToString() == _libraryFilter);
+        LibraryFilterLabel.Text = $"{button.Content} 보기";
+        if (button.Parent is StackPanel panel)
+            foreach (var child in panel.Children.OfType<WpfButton>())
+                child.Background = (System.Windows.Media.Brush)FindResource(ReferenceEquals(child, button) ? "AccentBrush" : "SurfaceBrush");
+    }
+
+    private async void WallpaperThumbnail_Loaded(object sender, RoutedEventArgs args)
+    {
+        if (sender is not System.Windows.Controls.Image { DataContext: WallpaperItem item } image) return;
+        try
+        {
+            var thumbnail = await _thumbnails.LoadAsync(item.Copy(), _libraryLifetime.Token);
+            if (!_runtimeClosing && ReferenceEquals(image.DataContext, item))
+            {
+                image.Source = thumbnail;
+                image.ToolTip = thumbnail is null ? "웹 월페이퍼는 정지 미리보기를 제공하지 않습니다." : item.Name;
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception)
+        {
+            if (!_runtimeClosing)
+            {
+                image.ToolTip = $"미리보기를 표시하지 못했습니다: {exception.Message}";
+                await _logger.ErrorAsync($"월페이퍼 미리보기 실패: {item.Name}", exception);
+            }
+        }
+    }
+
+    private async void VideoRangeButton_Click(object sender, RoutedEventArgs args)
+    {
+        if (sender is not WpfButton { Tag: WallpaperItem { Kind: WallpaperKind.Video } item } button) return;
+        var entered = false;
+        button.IsEnabled = false;
+        try
+        {
+            await _libraryMutationGate.WaitAsync(_libraryLifetime.Token);
+            entered = true;
+            var duration = await _videoMetadata.GetDurationAsync(item.SourcePath, _libraryLifetime.Token);
+            if (_runtimeClosing) return;
+            var dialog = new VideoRangeWindow(item, duration) { Owner = this };
+            if (dialog.ShowDialog() != true) return;
+            var oldStart = item.VideoStartSeconds;
+            var oldEnd = item.VideoEndSeconds;
+            item.VideoStartSeconds = dialog.Start;
+            item.VideoEndSeconds = dialog.End;
+            try { await SaveSettingsAsync(); }
+            catch
+            {
+                item.VideoStartSeconds = oldStart;
+                item.VideoEndSeconds = oldEnd;
+                throw;
+            }
+            LibraryList.Items.Refresh();
+        }
+        catch (OperationCanceledException) when (_runtimeClosing) { }
+        catch (Exception exception) { await ReportErrorAsync("영상 재생 구간을 설정하지 못했습니다.", exception); }
+        finally
+        {
+            if (entered) _libraryMutationGate.Release();
+            button.IsEnabled = true;
+        }
+    }
+
     private async void LibraryList_MouseDoubleClick(
         object sender,
         MouseButtonEventArgs eventArgs)
@@ -825,6 +902,7 @@ public partial class MainWindow : Window
                 await _libraryStore.DeleteAsync(
                     wallpaper,
                     _libraryLifetime.Token);
+                await _thumbnails.RemoveAsync(wallpaper.Id);
             }
             catch (Exception exception)
             {

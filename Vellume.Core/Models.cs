@@ -61,10 +61,36 @@ public sealed class WallpaperItem
     public WallpaperKind Kind { get; set; }
     public bool IsBuiltIn { get; set; }
     public bool IsManaged { get; set; }
+    public double? VideoStartSeconds { get; set; }
+    public double? VideoEndSeconds { get; set; }
+    [JsonIgnore]
+    public bool HasVideoRange => Kind == WallpaperKind.Video &&
+        (VideoStartSeconds.HasValue || VideoEndSeconds.HasValue);
+    [JsonIgnore]
+    public string KindLabel => Kind switch
+    {
+        WallpaperKind.Image => "이미지",
+        WallpaperKind.Video => "영상",
+        WallpaperKind.Gif => "GIF",
+        _ => "웹"
+    };
+    [JsonIgnore]
+    public string VideoRangeLabel => HasVideoRange
+        ? $"구간 반복 · {VideoStartSeconds:0.###}~{VideoEndSeconds:0.###}초"
+        : Kind == WallpaperKind.Video ? "전체 반복" : string.Empty;
     [JsonIgnore]
     public string StorageLabel => IsManaged
-        ? $"{Kind} · Vellume 라이브러리"
-        : $"{Kind} · 외부 경로";
+        ? $"{KindLabel} · Vellume 라이브러리"
+        : $"{KindLabel} · 외부 경로";
+
+    public void ValidateVideoRange(double duration)
+    {
+        if (!HasVideoRange) return;
+        if (VideoStartSeconds is not double start || VideoEndSeconds is not double end ||
+            !double.IsFinite(start) || !double.IsFinite(end) || !double.IsFinite(duration) ||
+            start < 0 || end - start < 0.1 || end > duration)
+            throw new ArgumentException("시작은 0초 이상, 종료는 영상 길이 이하여야 하며 구간은 0.1초 이상이어야 합니다.");
+    }
 
     public WallpaperItem Copy() => new()
     {
@@ -74,7 +100,9 @@ public sealed class WallpaperItem
         OriginalSourcePath = OriginalSourcePath,
         Kind = Kind,
         IsBuiltIn = IsBuiltIn,
-        IsManaged = IsManaged
+        IsManaged = IsManaged,
+        VideoStartSeconds = VideoStartSeconds,
+        VideoEndSeconds = VideoEndSeconds
     };
 }
 

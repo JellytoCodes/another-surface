@@ -27,30 +27,36 @@ public sealed class WallpaperLibraryStore
         Directory.CreateDirectory(_libraryDirectory);
     }
 
-    public Task<VideoPlaybackPreparation> PrepareForPlaybackAsync(
+    public async Task<VideoPlaybackPreparation> PrepareForPlaybackAsync(
         WallpaperItem wallpaper,
         int maximumWidth,
         int maximumHeight,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool optimize = true)
     {
         ArgumentNullException.ThrowIfNull(wallpaper);
         if (wallpaper.Kind != WallpaperKind.Video ||
             !wallpaper.IsManaged ||
             !OwnsItemPath(wallpaper))
         {
-            return Task.FromResult(
-                new VideoPlaybackPreparation(
+            if (wallpaper.HasVideoRange)
+                throw new InvalidOperationException("구간 재생은 Vellume 라이브러리에 복사된 영상에서 사용할 수 있습니다.");
+            return new VideoPlaybackPreparation(
                     wallpaper.Copy(),
                     UsedProxy: false,
                     GeneratedProxy: false,
-                    "원본 월페이퍼를 사용합니다."));
+                    "원본 월페이퍼를 사용합니다.");
         }
 
-        return _videoProxyCache.PrepareAsync(
+        if (wallpaper.HasVideoRange)
+            return await _videoProxyCache.PrepareSegmentAsync(wallpaper,
+                optimize ? maximumWidth : 0, optimize ? maximumHeight : 0, cancellationToken).ConfigureAwait(false);
+        return optimize ? await _videoProxyCache.PrepareAsync(
             wallpaper,
             maximumWidth,
             maximumHeight,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false)
+            : new VideoPlaybackPreparation(wallpaper.Copy(), false, false, "원본 월페이퍼를 사용합니다.");
     }
 
     public async Task<WallpaperItem> ImportAsync(

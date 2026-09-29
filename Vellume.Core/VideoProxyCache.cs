@@ -61,6 +61,97 @@ public sealed class VideoProxyCache
     public bool IsAvailable =>
         _ffmpegPath is not null && _ffprobePath is not null;
 
+    public async Task<double> GetDurationAsync(string sourcePath, CancellationToken cancellationToken = default)
+    {
+        if (_ffprobePath is null)
+            throw new InvalidOperationException("영상 길이를 확인하려면 기존 영상 최적화 도구인 ffprobe가 필요합니다. PATH 또는 VELLUME_FFPROBE_PATH를 확인하세요.");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(15));
+        var result = await RunProcessAsync(_ffprobePath,
+            ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", sourcePath],
+            timeout.Token).ConfigureAwait(false);
+        if (result.ExitCode != 0 || !double.TryParse(result.Output.Trim(), NumberStyles.Float,
+                CultureInfo.InvariantCulture, out var duration) || !double.IsFinite(duration) || duration <= 0)
+            throw new InvalidOperationException("영상의 전체 길이를 읽지 못했습니다.");
+        return duration;
+    }
+
+    public async Task CreateVideoThumbnailAsync(string sourcePath, string outputPath,
+        CancellationToken cancellationToken = default)
+    {
+        if (_ffmpegPath is null)
+            throw new InvalidOperationException("영상 미리보기를 만들려면 ffmpeg가 필요합니다.");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(20));
+        var seek = _ffprobePath is null ? 0
+            : Math.Min(1, await GetDurationAsync(sourcePath, timeout.Token).ConfigureAwait(false) * 0.1);
+        var result = await RunProcessAsync(_ffmpegPath,
+            ["-y", "-hide_banner", "-loglevel", "error", "-ss", seek.ToString("R", CultureInfo.InvariantCulture), "-i", sourcePath,
+             "-map", "0:v:0", "-frames:v", "1", "-vf", "scale=320:180:force_original_aspect_ratio=decrease",
+             "-threads", "1", outputPath], timeout.Token).ConfigureAwait(false);
+        if (result.ExitCode != 0 || !File.Exists(outputPath) || new FileInfo(outputPath).Length == 0)
+            throw new InvalidOperationException("영상 미리보기를 만들지 못했습니다.");
+    }
+
+    internal async Task<VideoPlaybackPreparation> PrepareSegmentAsync(WallpaperItem original,
+        int maximumWidth, int maximumHeight, CancellationToken cancellationToken)
+    {
+        if (!IsAvailable)
+            throw new InvalidOperationException("구간 재생에는 ffmpeg와 ffprobe가 필요합니다. 기존 영상 최적화 도구 경로를 확인하세요.");
+        var duration = await GetDurationAsync(original.SourcePath, cancellationToken).ConfigureAwait(false);
+        original.ValidateVideoRange(duration);
+        var start = original.VideoStartSeconds!.Value;
+        var end = original.VideoEndSeconds!.Value;
+        var input = new FileInfo(original.SourcePath);
+        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(FormattableString.Invariant(
+                $"{input.FullName}|{input.Length}|{input.LastWriteTimeUtc.Ticks}|{start:R}|{end:R}|{maximumWidth}x{maximumHeight}")))).ToLowerInvariant();
+        var directory = Path.Combine(Path.GetDirectoryName(original.SourcePath)!, CacheDirectoryName);
+        Directory.CreateDirectory(directory);
+        var target = Path.Combine(directory, $"segment-{key}-v1.mp4");
+        var playback = original.Copy();
+        playback.SourcePath = target;
+        // The renderer loops a complete cached clip; do not apply the original offsets again.
+        playback.VideoStartSeconds = null;
+        playback.VideoEndSeconds = null;
+        if (File.Exists(target) && new FileInfo(target).Length > 0)
+        {
+            TouchProxy(target);
+            return new(playback, true, false, "저장된 구간 재생 캐시를 사용합니다.");
+        }
+        var temporary = Path.Combine(directory, $".segment-{Guid.NewGuid():N}.partial.mp4");
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromMinutes(2));
+            var filter = "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p";
+            if (maximumWidth > 0 && maximumHeight > 0)
+            {
+                var metadata = await ProbeAsync(input.FullName, timeout.Token).ConfigureAwait(false);
+                var rate = Math.Clamp(metadata?.FramesPerSecond is > 0 ? metadata.FramesPerSecond : 30, 1, 30);
+                filter = $"scale=w='min(iw,{MakeEven(maximumWidth)})':h='min(ih,{MakeEven(maximumHeight)})':" +
+                    $"force_original_aspect_ratio=decrease:force_divisible_by=2,format=yuv420p,fps={FormatFrameRate(rate)}";
+            }
+            var result = await RunProcessAsync(_ffmpegPath!,
+                ["-y", "-hide_banner", "-loglevel", "error",
+                 "-ss", start.ToString("R", CultureInfo.InvariantCulture), "-i", input.FullName,
+                 "-t", (end - start).ToString("R", CultureInfo.InvariantCulture),
+                 "-map", "0:v:0", "-map", "0:a?", "-vf", filter,
+                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-threads", "2",
+                 "-c:a", "aac", "-movflags", "+faststart", temporary], timeout.Token).ConfigureAwait(false);
+            if (result.ExitCode != 0 || !File.Exists(temporary) || new FileInfo(temporary).Length == 0)
+                throw new InvalidOperationException("구간 재생 캐시 생성에 실패했습니다. 원본은 변경되지 않았습니다.");
+            File.Move(temporary, target, overwrite: true);
+            TouchProxy(target);
+            return new(playback, true, true, "선택한 시간 구간의 반복 재생 캐시를 만들었습니다.");
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException("구간 캐시 생성이 2분을 초과했습니다. 더 짧은 구간을 선택하거나 영상 최적화를 켜주세요.");
+        }
+        finally { TryDeleteFile(temporary); }
+    }
+
     public async Task<VideoPlaybackPreparation> PrepareAsync(
         WallpaperItem wallpaper,
         int maximumWidth,
@@ -567,7 +658,7 @@ public sealed class VideoProxyCache
                 // Only generated complete proxies, never original media, partial files,
                 // arbitrary nested content or linked files/directories.
                 if (Regex.IsMatch(Path.GetFileName(path),
-                        @"^video-\d+x\d+-\d+fps-h264-v\d+\.mp4$",
+                        @"^(video-\d+x\d+-\d+fps-h264-v\d+|segment-[a-f0-9]{64}-v1)\.mp4$",
                         RegexOptions.CultureInvariant) && !IsReparsePoint(path))
                 {
                     candidates.Add(new FileInfo(path));

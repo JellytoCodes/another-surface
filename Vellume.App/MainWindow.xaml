@@ -203,17 +203,21 @@
             <Grid x:Name="LibraryPage" Visibility="Collapsed">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="22"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
                 <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
                     <StackPanel>
                                 <TextBlock Text="라이브러리" FontSize="30" FontWeight="Bold"/>
                                 <TextBlock Text="등록한 이미지, GIF, MP4/WebM 영상과 로컬 HTML을 Vellume 저장소에서 관리합니다."
-                                   Margin="0,7,0,0"
+                                   Margin="0,7,12,0" TextWrapping="Wrap"
                                    Foreground="{StaticResource MutedTextBrush}"/>
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                 <Button Content="+ 파일 추가"
                                 Click="AddFileButton_Click"
                                 Margin="0,0,8,0"/>
@@ -223,6 +227,14 @@
                     </StackPanel>
                 </Grid>
 
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,18,0,14">
+                    <Button Content="전체" Tag="All" Click="LibraryFilter_Click" Margin="0,0,8,0" Background="{StaticResource AccentBrush}"/>
+                    <Button Content="이미지" Tag="Image" Click="LibraryFilter_Click" Margin="0,0,8,0"/>
+                    <Button Content="영상" Tag="Video" Click="LibraryFilter_Click" Margin="0,0,8,0"/>
+                    <Button Content="GIF" Tag="Gif" Click="LibraryFilter_Click" Margin="0,0,8,0"/>
+                    <Button Content="웹" Tag="Web" Click="LibraryFilter_Click" Margin="0,0,14,0"/>
+                    <TextBlock x:Name="LibraryFilterLabel" Text="전체 보기" VerticalAlignment="Center"/>
+                </StackPanel>
                 <ListBox x:Name="LibraryList"
                          Grid.Row="2"
                          MouseDoubleClick="LibraryList_MouseDoubleClick"
@@ -234,31 +246,54 @@
                                     Padding="17">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="54"/>
+                                        <ColumnDefinition Width="112"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <Border Width="42"
-                                            Height="42"
+                                    <Border Width="100"
+                                            Height="64"
                                             CornerRadius="8"
                                             Background="#2A3150">
-                                        <TextBlock Text="V"
-                                                   FontSize="20"
-                                                   FontWeight="Bold"
-                                                   HorizontalAlignment="Center"
-                                                   VerticalAlignment="Center"
-                                                   Foreground="{StaticResource AccentBrush}"/>
+                                        <Grid>
+                                            <TextBlock Text="{Binding KindLabel}" Foreground="#BEC8D1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Source, ElementName=WallpaperThumbnail}" Value="{x:Null}">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <Image x:Name="WallpaperThumbnail" Stretch="Uniform" Loaded="WallpaperThumbnail_Loaded"/>
+                                        </Grid>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Name}"
+                                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"
                                                    FontSize="16"
                                                    FontWeight="SemiBold"/>
                                         <TextBlock Text="{Binding StorageLabel}"
                                                    Margin="0,4,0,0"
                                                    Foreground="{StaticResource MutedTextBrush}"
                                                    FontSize="12"/>
+                                        <TextBlock Text="{Binding VideoRangeLabel}" FontSize="12" Foreground="{StaticResource MutedTextBrush}"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                        <Button Content="재생 구간" Click="VideoRangeButton_Click" Tag="{Binding}" Margin="0,0,8,0">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding KindLabel}" Value="영상">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
                                                     <Button Content="적용"
                                                 Click="ApplyCardButton_Click"
                                                 Tag="{Binding}"
