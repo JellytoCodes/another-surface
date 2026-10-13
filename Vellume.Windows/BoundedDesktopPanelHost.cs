@@ -126,6 +126,12 @@ internal sealed class BoundedDesktopPanelHost : IDisposable
         _surface.ApplyDesktopZOrder();
     }
 
+    internal void MoveTo(int x, int y)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _surface.MoveTo(x, y);
+    }
+
     public void Dispose()
     {
         if (_disposed)

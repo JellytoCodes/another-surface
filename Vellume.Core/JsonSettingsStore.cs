@@ -115,7 +115,7 @@ public sealed class JsonSettingsStore : ISettingsStore
                 }
             }
 
-            settings.SchemaVersion = 18;
+            settings.SchemaVersion = AppSettings.CurrentSchemaVersion;
             settings.Playback = settings.Playback.Copy();
             settings.DisplayWallpapers = settings.DisplayWallpapers
                 .Where(profile =>
@@ -127,13 +127,7 @@ public sealed class JsonSettingsStore : ISettingsStore
                 .Select(group => group.Last().Copy())
                 .ToList();
             settings.Dock = settings.Dock.Copy();
-            var normalizedWidgets = settings.Widgets.Copy();
-            settings.Widgets.QuickSlots = normalizedWidgets.QuickSlots;
-            settings.Widgets.SystemShortcuts =
-                normalizedWidgets.SystemShortcuts;
-            settings.Widgets.QuickSlotGroups =
-                normalizedWidgets.QuickSlotGroups;
-            settings.Widgets.CodexCompanionSide = WidgetSide.Left;
+            settings.Widgets = settings.Widgets.Copy();
             return settings;
         }
         finally
@@ -150,7 +144,7 @@ public sealed class JsonSettingsStore : ISettingsStore
             .ConfigureAwait(false);
         try
         {
-            settings.SchemaVersion = 18;
+            settings.SchemaVersion = AppSettings.CurrentSchemaVersion;
             settings.Playback =
                 (settings.Playback ?? new PlaybackOptions()).Copy();
             settings.DisplayWallpapers =
@@ -164,8 +158,7 @@ public sealed class JsonSettingsStore : ISettingsStore
                 .Select(group => group.Last().Copy())
                 .ToList();
             settings.Dock = (settings.Dock ?? new DockSettings()).Copy();
-            settings.Widgets ??= new WidgetSettings();
-            settings.Widgets.CodexCompanionSide = WidgetSide.Left;
+            settings.Widgets = (settings.Widgets ?? new WidgetSettings()).Copy();
             var directory = Path.GetDirectoryName(_settingsPath)
                 ?? throw new InvalidOperationException("The settings path has no parent directory.");
             Directory.CreateDirectory(directory);

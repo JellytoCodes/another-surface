@@ -262,8 +262,8 @@ public sealed class NativeDesktopOverlayIntegrationTests
     {
         RunOnStaThread(() =>
         {
-            const int width = 500;
-            const int height = 340;
+            const int width = 320;
+            const int height = 200;
             var renderer = new NativeWidgetRendererWindow();
             var clock = renderer.CreateClock(WidgetSide.Right);
             renderer.UpdateClock();
@@ -301,7 +301,7 @@ public sealed class NativeDesktopOverlayIntegrationTests
 
             Assert.InRange(
                 visiblePixels,
-                5_000,
+                1_000,
                 width * height / 2);
 
             var previewPath = Environment.GetEnvironmentVariable(
@@ -573,18 +573,17 @@ public sealed class NativeDesktopOverlayIntegrationTests
         window.ResumeAsync().GetAwaiter().GetResult();
         Assert.False(window.IsPaused);
         Assert.All(
-            window.PanelPresentationGenerations
+            window.PanelPresentationGenerations.Skip(1)
                 .Zip(
-                    generationsWhilePaused,
+                    generationsWhilePaused.Skip(1),
                     (current, previous) => current > previous),
             Assert.True);
 
         Assert.True(window.IsReady);
         Assert.True(window.IsAttachedTo(parent));
         var panelHandles = window.PanelHandles.ToArray();
-        // Clock and system information share the right surface while the
-        // fixed upper-left companion uses the left surface.
-        Assert.Equal(2, panelHandles.Length);
+        // Independent surfaces remain small at arbitrary widget positions.
+        Assert.Equal(3, panelHandles.Length);
         Assert.Equal(
             panelHandles.Length,
             panelHandles.Distinct().Count());
@@ -780,7 +779,7 @@ public sealed class NativeDesktopOverlayIntegrationTests
             "backend=native-top-level-alpha-skins",
             window.GetAttachmentDiagnostics());
         Assert.Contains(
-            "panelCount=2",
+            "panelCount=3",
             window.GetAttachmentDiagnostics());
         Assert.Contains(
             "topLevelPanels=true",

@@ -178,6 +178,19 @@ internal sealed class LayeredWpfPanelHost : IDisposable
         }
     }
 
+    internal void MoveTo(int x, int y)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        // Windows retains the layered bitmap when only the HWND origin moves.
+        // Dragging does not measure WPF, copy pixels, or submit another frame.
+        if (!NativeMethods.SetWindowPos(Handle, nint.Zero, x, y, 0, 0,
+                NativeMethods.SwpNoActivate | NativeMethods.SwpNoZOrder | NativeMethods.SwpNoSize))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(),
+                "알파 위젯 패널의 위치를 갱신하지 못했습니다.");
+        }
+    }
+
     internal void Render(FrameworkElement visual)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

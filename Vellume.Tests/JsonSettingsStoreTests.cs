@@ -324,7 +324,7 @@ public sealed class JsonSettingsStoreTests
 
             var settings = await new JsonSettingsStore(path).LoadAsync();
 
-            Assert.Equal(18, settings.SchemaVersion);
+            Assert.Equal(AppSettings.CurrentSchemaVersion, settings.SchemaVersion);
             var profile = Assert.Single(settings.DisplayWallpapers);
             Assert.Equal("DISPLAY2", profile.DisplayId);
             Assert.Equal("Legacy Secondary", profile.Wallpaper?.Name);
@@ -385,7 +385,7 @@ public sealed class JsonSettingsStoreTests
             var settings =
                 await new JsonSettingsStore(path).LoadAsync();
 
-            Assert.Equal(18, settings.SchemaVersion);
+            Assert.Equal(AppSettings.CurrentSchemaVersion, settings.SchemaVersion);
             Assert.False(
                 settings.Playback
                     .PauseWhenForegroundAppIsMaximized);
@@ -425,7 +425,7 @@ public sealed class JsonSettingsStoreTests
             var settings =
                 await new JsonSettingsStore(path).LoadAsync();
 
-            Assert.Equal(18, settings.SchemaVersion);
+            Assert.Equal(AppSettings.CurrentSchemaVersion, settings.SchemaVersion);
             Assert.Empty(settings.Playback.ApplicationRules);
         }
         finally
@@ -483,7 +483,7 @@ public sealed class JsonSettingsStoreTests
             var settings =
                 await new JsonSettingsStore(path).LoadAsync();
 
-            Assert.Equal(18, settings.SchemaVersion);
+            Assert.Equal(AppSettings.CurrentSchemaVersion, settings.SchemaVersion);
             var custom = Assert.Single(
                 settings.Playback.ApplicationRules);
             Assert.Equal("CustomRenderer", custom.ProcessName);
@@ -542,7 +542,7 @@ public sealed class JsonSettingsStoreTests
             var settings =
                 await new JsonSettingsStore(path).LoadAsync();
 
-            Assert.Equal(18, settings.SchemaVersion);
+            Assert.Equal(AppSettings.CurrentSchemaVersion, settings.SchemaVersion);
             var custom = Assert.Single(
                 settings.Playback.ApplicationRules);
             Assert.Equal("CustomRenderer", custom.ProcessName);
@@ -594,7 +594,7 @@ public sealed class JsonSettingsStoreTests
             var settings =
                 await new JsonSettingsStore(path).LoadAsync();
 
-            Assert.Equal(18, settings.SchemaVersion);
+            Assert.Equal(AppSettings.CurrentSchemaVersion, settings.SchemaVersion);
             var custom = Assert.Single(
                 settings.Playback.ApplicationRules);
             Assert.Equal("CustomRenderer", custom.ProcessName);
@@ -640,7 +640,7 @@ public sealed class JsonSettingsStoreTests
             var settings =
                 await new JsonSettingsStore(path).LoadAsync();
 
-            Assert.Equal(18, settings.SchemaVersion);
+            Assert.Equal(AppSettings.CurrentSchemaVersion, settings.SchemaVersion);
             Assert.Empty(settings.Playback.ApplicationRules);
         }
         finally
@@ -681,7 +681,7 @@ public sealed class JsonSettingsStoreTests
             var settings =
                 await new JsonSettingsStore(path).LoadAsync();
 
-            Assert.Equal(18, settings.SchemaVersion);
+            Assert.Equal(AppSettings.CurrentSchemaVersion, settings.SchemaVersion);
             Assert.Empty(settings.Playback.ApplicationRules);
         }
         finally
@@ -723,7 +723,7 @@ public sealed class JsonSettingsStoreTests
             var settings =
                 await new JsonSettingsStore(path).LoadAsync();
 
-            Assert.Equal(18, settings.SchemaVersion);
+            Assert.Equal(AppSettings.CurrentSchemaVersion, settings.SchemaVersion);
             Assert.Empty(settings.Playback.ApplicationRules);
         }
         finally
@@ -762,7 +762,7 @@ public sealed class JsonSettingsStoreTests
 
             var settings = await new JsonSettingsStore(path).LoadAsync();
 
-            Assert.Equal(18, settings.SchemaVersion);
+            Assert.Equal(AppSettings.CurrentSchemaVersion, settings.SchemaVersion);
             Assert.Equal("DISPLAY1", settings.SelectedMonitorId);
             Assert.False(settings.Playback.IsMuted);
             Assert.Equal(0.4, settings.Playback.Volume, precision: 2);
@@ -828,7 +828,7 @@ public sealed class JsonSettingsStoreTests
 
             var settings = await new JsonSettingsStore(path).LoadAsync();
 
-            Assert.Equal(18, settings.SchemaVersion);
+            Assert.Equal(AppSettings.CurrentSchemaVersion, settings.SchemaVersion);
             Assert.Empty(settings.Widgets.QuickSlots);
             var recycleBin = settings.Widgets.SystemShortcuts.Single(item =>
                 item.Kind == SystemShortcutKind.RecycleBin);
@@ -904,7 +904,7 @@ public sealed class JsonSettingsStoreTests
 
             var settings = await new JsonSettingsStore(path).LoadAsync();
 
-            Assert.Equal(18, settings.SchemaVersion);
+            Assert.Equal(AppSettings.CurrentSchemaVersion, settings.SchemaVersion);
             Assert.Equal(3, settings.Widgets.QuickSlotGroups.Count);
             Assert.DoesNotContain(
                 settings.Widgets.QuickSlotGroups,
@@ -977,7 +977,7 @@ public sealed class JsonSettingsStoreTests
 
             var settings = await new JsonSettingsStore(path).LoadAsync();
 
-            Assert.Equal(18, settings.SchemaVersion);
+            Assert.Equal(AppSettings.CurrentSchemaVersion, settings.SchemaVersion);
             Assert.Equal(
                 ["게임", "앱", "작업"],
                 settings.Widgets.QuickSlotGroups
@@ -1072,7 +1072,7 @@ public sealed class JsonSettingsStoreTests
             var settings =
                 await new JsonSettingsStore(path).LoadAsync();
 
-            Assert.Equal(18, settings.SchemaVersion);
+            Assert.Equal(AppSettings.CurrentSchemaVersion, settings.SchemaVersion);
             Assert.False(settings.Widgets.ShowQuickSlots);
             Assert.DoesNotContain(
                 settings.Widgets.QuickSlotGroups,

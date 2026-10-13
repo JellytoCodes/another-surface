@@ -122,6 +122,8 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 
 	public event EventHandler<QuickSlotLayoutChangedEventArgs>? QuickSlotLayoutChanged;
 
+	public event EventHandler<WidgetPlacementChangedEventArgs>? WidgetPlacementChanged;
+
 	public WallpaperController(string webViewDataDirectory, IAppLogger logger, ISystemShortcutService systemShortcutService, WindowsSystemEventMonitor systemEventMonitor)
 	{
 		_webViewDataDirectory = webViewDataDirectory;
@@ -550,9 +552,9 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 				await CloseWidgetCoreAsync(clearDisplay: true);
 				await CloseQuickSlotWindowsAsync();
 			}
-			else if (_widgetDisplay is null || !_widgetDisplay.HasSameGeometry(widgetDisplay) ||
-				(_widgetSettings.IsEnabled && HasInformationWidgets(_widgetSettings) && _widgetRenderer is null))
+			else
 			{
+				var primaryGeometryChanged = _widgetDisplay is null || !_widgetDisplay.HasSameGeometry(widgetDisplay);
 				_widgetDisplay = widgetDisplay;
 				if (_widgetSettings.IsEnabled)
 				{
@@ -561,7 +563,10 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 					{
 						await EnsureWidgetRendererAsync(host, widgetDisplay, _widgetSettings, cancellationToken);
 					}
-					await EnsureQuickSlotWindowsAsync(_hostLocator.InteractiveHostHandle, widgetDisplay, _widgetSettings, cancellationToken);
+					if (primaryGeometryChanged)
+					{
+						await EnsureQuickSlotWindowsAsync(_hostLocator.InteractiveHostHandle, widgetDisplay, _widgetSettings, cancellationToken);
+					}
 					_hostHandle = host;
 					_interactiveHostHandle = _hostLocator.InteractiveHostHandle;
 				}
@@ -695,9 +700,11 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 			{
 				if (_widgetRenderer != null)
 				{
+					_widgetRenderer.PlacementChanged -= WidgetRendererOnPlacementChanged;
 					await _widgetRenderer.CloseSafelyAsync();
 				}
 				_widgetRenderer = new NativeWidgetRendererWindow();
+				_widgetRenderer.PlacementChanged += WidgetRendererOnPlacementChanged;
 				AttachWidgetRenderer(_widgetRenderer, hostHandle, display);
 				await _widgetRenderer.InitializeAsync(cancellationToken);
 			}
@@ -837,6 +844,21 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 		this.QuickSlotLayoutChanged?.Invoke(this, eventArgs2);
 	}
 
+	private void WidgetRendererOnPlacementChanged(object? sender, WidgetPlacementChangedEventArgs eventArgs)
+	{
+		if (!_dispatcher.CheckAccess())
+		{
+			_dispatcher.BeginInvoke(() => WidgetRendererOnPlacementChanged(sender, eventArgs));
+			return;
+		}
+		if (_disposed || !ReferenceEquals(sender, _widgetRenderer))
+		{
+			return;
+		}
+		_widgetSettings.SetPlacement(eventArgs.Kind, eventArgs.Placement);
+		WidgetPlacementChanged?.Invoke(this, new WidgetPlacementChangedEventArgs(eventArgs.Kind, eventArgs.Placement));
+	}
+
 	private async Task CloseWallpaperCoreAsync()
 	{
 		IWallpaperRenderer? renderer = _renderer;
@@ -863,6 +885,7 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 		}
 		if (widgetRenderer != null)
 		{
+			widgetRenderer.PlacementChanged -= WidgetRendererOnPlacementChanged;
 			await widgetRenderer.CloseSafelyAsync();
 		}
 	}
@@ -1406,7 +1429,9 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 	{
 		renderer.AttachTo(
 			hostHandle,
-			display);
+			display,
+			_hostLocator.InteractiveHostHandle != nint.Zero
+				? _hostLocator.InteractiveHostHandle : _interactiveHostHandle);
 	}
 
 	private async Task FinalizeDesktopLayerOrderAsync(IWallpaperRenderer wallpaper, NativeWidgetRendererWindow? widgets, nint hostHandle, DisplayInfo display, CancellationToken cancellationToken)

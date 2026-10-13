@@ -34,9 +34,8 @@ internal enum CodexCompanionVisualState
 }
 
 /// <summary>
-/// Coordinates at most one bounded alpha surface per desktop side. Widgets
-/// remain logically independent, but panels sharing a side are rasterized
-/// into one premultiplied BGRA surface without a separate redirection parent.
+/// Coordinates one bounded alpha surface per widget. Independent small windows
+/// preserve click-through pixels while permitting arbitrary monitor placement.
 /// </summary>
 internal sealed class NativeWidgetRendererWindow
 {
@@ -74,20 +73,14 @@ internal sealed class NativeWidgetRendererWindow
     private readonly DispatcherTimer _clockTimer;
     private readonly Dictionary<string, GaugeVisual> _gauges =
         new(StringComparer.Ordinal);
-    private BoundedDesktopPanelHost? _leftPanelHost;
-    private BoundedDesktopPanelHost? _rightPanelHost;
-    private FrameworkElement? _leftPanelGroupVisual;
-    private FrameworkElement? _rightPanelGroupVisual;
-    private FrameworkElement? _clockPanelVisual;
-    private FrameworkElement? _systemPanelVisual;
-    private FrameworkElement? _codexPanelVisual;
+    private readonly Dictionary<WidgetKind, WidgetHostState> _widgetHosts = [];
+    private readonly IMonitorService _monitorService;
+    private IReadOnlyList<DisplayInfo> _availableDisplays = [];
+    private DisplayInfo? _attachedDisplay;
+    private nint _interactiveHostHandle;
     private WidgetPanelRenderTarget? _clockRenderTarget;
     private WidgetPanelRenderTarget? _systemRenderTarget;
     private WidgetPanelRenderTarget? _codexRenderTarget;
-    private int _leftPanelX;
-    private int _leftPanelY;
-    private int _rightPanelX;
-    private int _rightPanelY;
     private WidgetSettings _settings = new();
     private nint _hostHandle;
     private nint _compositionParentHandle;
@@ -100,11 +93,7 @@ internal sealed class NativeWidgetRendererWindow
     private bool _initialized;
     private bool _disposed;
 
-    private VectorTextBlock? _clockYear;
-    private VectorTextBlock? _clockWeekday;
-    private VectorTextBlock? _clockDay;
-    private VectorTextBlock? _clockMonth;
-    private VectorTextBlock? _clockTime;
+    private SimpleClockVisual? _simpleClock;
     private TextBlock? _codexHeadline;
     private StackPanel? _codexProjects;
     private StackPanel? _codexUsageLimits;
@@ -119,8 +108,9 @@ internal sealed class NativeWidgetRendererWindow
     private CodexCompanionSnapshot _lastCodex =
         CodexCompanionSnapshot.Disconnected();
 
-    internal NativeWidgetRendererWindow()
+    internal NativeWidgetRendererWindow(IMonitorService? monitorService = null)
     {
+        _monitorService = monitorService ?? new WindowsMonitorService();
         _clockTimer = new DispatcherTimer(
             DispatcherPriority.Background)
         {
@@ -165,6 +155,8 @@ internal sealed class NativeWidgetRendererWindow
 
     internal bool IsPaused => _isPaused;
 
+    internal event EventHandler<WidgetPlacementChangedEventArgs>? PlacementChanged;
+
     internal bool IsReady =>
         !_disposed &&
         _initialized &&
@@ -173,15 +165,17 @@ internal sealed class NativeWidgetRendererWindow
         _compositionParentHandle != nint.Zero &&
         NativeMethods.IsWindow(_compositionParentHandle) &&
         (!_settings.IsEnabled ||
-         !HasPanelsOnSide(WidgetSide.Left) ||
-         _leftPanelHost?.IsReady == true) &&
-        (!_settings.IsEnabled ||
-         !HasPanelsOnSide(WidgetSide.Right) ||
-         _rightPanelHost?.IsReady == true);
+         ((!_settings.ShowClock || IsWidgetReady(WidgetKind.Clock)) &&
+          (!_settings.ShowSystemInfo || IsWidgetReady(WidgetKind.SystemInfo)) &&
+          (!_settings.ShowCodexCompanion || IsWidgetReady(WidgetKind.CodexCompanion))));
+
+    private bool IsWidgetReady(WidgetKind kind)
+        => _widgetHosts.TryGetValue(kind, out var state) && state.Host.IsReady;
 
     internal void AttachTo(
         nint hostHandle,
-        DisplayInfo display)
+        DisplayInfo display,
+        nint interactiveHostHandle = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         _ = CalculateResolutionScale(display.Width, display.Height);
@@ -218,10 +212,14 @@ internal sealed class NativeWidgetRendererWindow
         _relativeY = nextRelativeY;
         _width = display.Width;
         _height = display.Height;
+        _attachedDisplay = display;
+        _interactiveHostHandle = interactiveHostHandle != nint.Zero
+            ? interactiveHostHandle : hostHandle;
+        RefreshAvailableDisplays();
 
         if (_initialized)
         {
-            if (sizeChanged)
+            if (sizeChanged || WidgetDisplayBoundsChanged())
             {
                 RebuildAlphaPanels();
                 UpdateClock();
@@ -269,10 +267,11 @@ internal sealed class NativeWidgetRendererWindow
         cancellationToken.ThrowIfCancellationRequested();
         ObjectDisposedException.ThrowIf(_disposed, this);
         var nextSettings = widgets.Copy();
+        RefreshAvailableDisplays();
         var panelLayoutChanged =
             !HasSameInformationPanelLayout(
                 _settings,
-                nextSettings);
+                nextSettings) || WidgetDisplayBoundsChanged();
         _settings = nextSettings;
         if (panelLayoutChanged)
         {
@@ -310,7 +309,16 @@ internal sealed class NativeWidgetRendererWindow
            current.ShowCodexCompanion ==
            next.ShowCodexCompanion &&
            current.ClockSide == next.ClockSide &&
-           current.SystemInfoSide == next.SystemInfoSide;
+           current.SystemInfoSide == next.SystemInfoSide &&
+           current.ClockStyle == next.ClockStyle &&
+           HasSamePlacement(current.ClockPlacement, next.ClockPlacement) &&
+           HasSamePlacement(current.SystemInfoPlacement, next.SystemInfoPlacement) &&
+           HasSamePlacement(current.CodexPlacement, next.CodexPlacement);
+
+    private static bool HasSamePlacement(WidgetPlacement a, WidgetPlacement b)
+        => a.Anchor == b.Anchor && a.IsLocked == b.IsLocked &&
+           a.X == b.X && a.Y == b.Y &&
+           string.Equals(a.DisplayId, b.DisplayId, StringComparison.OrdinalIgnoreCase);
 
     internal Task UpdateCodexAsync(CodexCompanionSnapshot codex)
     {
@@ -360,12 +368,7 @@ internal sealed class NativeWidgetRendererWindow
         => _initialized &&
            NativeMethods.IsWindow(hostHandle) &&
            _hostHandle == hostHandle &&
-           (_leftPanelHost is null ||
-            _leftPanelHost.IsAttachedTo(
-                _compositionParentHandle)) &&
-           (_rightPanelHost is null ||
-            _rightPanelHost.IsAttachedTo(
-                _compositionParentHandle));
+           EnumeratePanelHosts().All(host => host.IsAttachedTo(_compositionParentHandle));
 
     internal string GetAttachmentDiagnostics()
     {
@@ -417,15 +420,7 @@ internal sealed class NativeWidgetRendererWindow
         _clockTimer.Stop();
         _clockTimer.Tick -= ClockTimerOnTick;
         StopCodexAnimation();
-        _leftPanelHost?.Dispose();
-        _rightPanelHost?.Dispose();
-        _leftPanelHost = null;
-        _rightPanelHost = null;
-        _leftPanelGroupVisual = null;
-        _rightPanelGroupVisual = null;
-        _clockPanelVisual = null;
-        _systemPanelVisual = null;
-        _codexPanelVisual = null;
+        DisposeWidgetHosts();
         _clockRenderTarget = null;
         _systemRenderTarget = null;
         _codexRenderTarget = null;
@@ -441,200 +436,178 @@ internal sealed class NativeWidgetRendererWindow
         {
             host.SetWindowVisible(_isWindowVisible);
         }
+        foreach (var state in _widgetHosts.Values.ToArray())
+        {
+            state.Editor?.SetVisible(_isWindowVisible);
+        }
     }
+
+    private void DisposeWidgetHosts()
+    {
+        foreach (var state in _widgetHosts.Values)
+        {
+            state.Editor?.CloseSafely();
+            state.Host.Dispose();
+        }
+        _widgetHosts.Clear();
+    }
+
+    private void RefreshAvailableDisplays()
+    {
+        try
+        {
+            _availableDisplays = _monitorService.GetDisplays();
+        }
+        catch (Win32Exception)
+        {
+            _availableDisplays = _attachedDisplay is null ? [] : [_attachedDisplay];
+        }
+    }
+
+    private DisplayInfo ResolveDisplay(WidgetPlacement placement)
+        => _availableDisplays.FirstOrDefault(display =>
+               !string.IsNullOrWhiteSpace(placement.DisplayId) &&
+               display.Id.Equals(placement.DisplayId, StringComparison.OrdinalIgnoreCase))
+           ?? _attachedDisplay
+           ?? _availableDisplays.First();
+
+    private bool WidgetDisplayBoundsChanged()
+        => _widgetHosts.Values.Any(state =>
+        {
+            var display = ResolveDisplay(_settings.GetPlacement(state.Kind));
+            return display.Id != state.Display.Id || display.X != state.Display.X ||
+                   display.Y != state.Display.Y || display.Width != state.Display.Width ||
+                   display.Height != state.Display.Height;
+        });
 
     private void RebuildAlphaPanels()
     {
-        _leftPanelHost?.Dispose();
-        _rightPanelHost?.Dispose();
-        _leftPanelHost = null;
-        _rightPanelHost = null;
-        _leftPanelGroupVisual = null;
-        _rightPanelGroupVisual = null;
-        _clockPanelVisual = null;
-        _systemPanelVisual = null;
-        _codexPanelVisual = null;
+        DisposeWidgetHosts();
         ResetVisualReferences();
-        if (!_settings.IsEnabled ||
-            !_initialized ||
-            _hostHandle == nint.Zero ||
-            !NativeMethods.IsWindow(_hostHandle) ||
-            _compositionParentHandle == nint.Zero ||
-            !NativeMethods.IsWindow(_compositionParentHandle))
+        if (!_settings.IsEnabled || !_initialized || _attachedDisplay is null ||
+            _hostHandle == nint.Zero || !NativeMethods.IsWindow(_hostHandle) ||
+            _compositionParentHandle == nint.Zero || !NativeMethods.IsWindow(_compositionParentHandle))
         {
             return;
         }
-
-        // DisplayInfo and alpha HWND bounds use physical pixels. Do not multiply
-        // by Windows DPI again: scale the vector layout before rasterization.
-        var scale = CalculateResolutionScale(_width, _height);
-        var panels = new List<WidgetPanelPlacement>(4);
+        RefreshAvailableDisplays();
         if (_settings.ShowClock)
         {
-            var prepared = PrepareLayeredPanel(
-                CreateClock(_settings.ClockSide),
-                scale);
-            var panelX = CalculatePanelX(
-                _settings.ClockSide,
-                25 * scale,
-                prepared.Width);
-            _clockPanelVisual = prepared.Visual;
-            panels.Add(new WidgetPanelPlacement(
-                _settings.ClockSide,
-                prepared.Visual,
-                panelX,
-                ScalePosition(28, scale),
-                prepared.Width,
-                prepared.Height));
+            CreateWidgetHost(WidgetKind.Clock, CreateClock(_settings.ClockSide));
         }
-
         if (_settings.ShowSystemInfo)
         {
-            var prepared = PrepareLayeredPanel(
-                CreateSystemPanel(_settings.SystemInfoSide),
-                scale);
-            var panelX = CalculatePanelX(
-                _settings.SystemInfoSide,
-                25 * scale,
-                prepared.Width);
-            _systemPanelVisual = prepared.Visual;
-            panels.Add(new WidgetPanelPlacement(
-                _settings.SystemInfoSide,
-                prepared.Visual,
-                panelX,
-                ScalePosition(GetSystemPanelTop(), scale),
-                prepared.Width,
-                prepared.Height));
+            CreateWidgetHost(WidgetKind.SystemInfo, CreateSystemPanel(_settings.SystemInfoSide));
         }
-
         if (_settings.ShowCodexCompanion)
         {
-            var side = CodexPanelSide;
-            var prepared = PrepareLayeredPanel(
-                CreateCodexPanel(side),
-                scale);
-            var panelX = CalculatePanelX(
-                side,
-                28 * scale,
-                prepared.Width);
-            _codexPanelVisual = prepared.Visual;
-            panels.Add(new WidgetPanelPlacement(
-                side,
-                prepared.Visual,
-                panelX,
-                ScalePosition(28, scale),
-                prepared.Width,
-                prepared.Height));
+            CreateWidgetHost(WidgetKind.CodexCompanion, CreateCodexPanel(CodexPanelSide));
         }
-
-        CreateSidePanel(WidgetSide.Left, panels);
-        CreateSidePanel(WidgetSide.Right, panels);
         ApplyLayerOrder();
         ApplyWindowVisibility();
     }
 
-    private void CreateSidePanel(
-        WidgetSide side,
-        IReadOnlyList<WidgetPanelPlacement> panels)
+    private void CreateWidgetHost(WidgetKind kind, FrameworkElement visual)
     {
-        var sidePanels = panels
-            .Where(panel => panel.Side == side)
-            .ToArray();
-        if (sidePanels.Length == 0)
+        var placement = _settings.GetPlacement(kind);
+        var display = ResolveDisplay(placement);
+        var scale = CalculateResolutionScale(display.Width, display.Height);
+        var prepared = PrepareLayeredPanel(visual, scale);
+        var position = WidgetPlacementLayout.Resolve(placement,
+            display.Width, display.Height, prepared.Width, prepared.Height, 24 * scale);
+        var x = display.X + (int)Math.Round(position.X);
+        var y = display.Y + (int)Math.Round(position.Y);
+        var host = new BoundedDesktopPanelHost($"Vellume Alpha {kind} Widget",
+            _hostHandle, x, y, prepared.Width, prepared.Height);
+        try
+        {
+            host.Render(prepared.Visual);
+            var naturalWidth = double.IsNaN(visual.Width) ? visual.DesiredSize.Width : visual.Width;
+            var naturalHeight = double.IsNaN(visual.Height) ? visual.DesiredSize.Height : visual.Height;
+            var state = new WidgetHostState(kind, host, display, x, y, naturalWidth, naturalHeight);
+            _widgetHosts.Add(kind, state);
+            var target = new WidgetPanelRenderTarget(kind, prepared.Visual, prepared.Width, prepared.Height);
+            switch (kind)
+            {
+                case WidgetKind.Clock:
+                    _clockRenderTarget = target;
+                    break;
+                case WidgetKind.SystemInfo:
+                    _systemRenderTarget = target;
+                    break;
+                case WidgetKind.CodexCompanion:
+                    _codexRenderTarget = target;
+                    break;
+            }
+            if (!placement.IsLocked)
+            {
+                state.Editor = new WidgetEditingOverlayWindow(kind);
+                state.Editor.DragPositionChanged += MoveWidget;
+                state.Editor.SetBounds(_interactiveHostHandle, x, y, prepared.Width, prepared.Height, _isWindowVisible);
+            }
+        }
+        catch
+        {
+            host.Dispose();
+            throw;
+        }
+    }
+
+    internal void MoveWidget(WidgetKind kind, int requestedX, int requestedY, bool completed)
+    {
+        if (_disposed || !_widgetHosts.TryGetValue(kind, out var state) ||
+            _settings.GetPlacement(kind).IsLocked)
         {
             return;
         }
-
-        var left = sidePanels.Min(panel => panel.X);
-        var top = sidePanels.Min(panel => panel.Y);
-        var right = sidePanels.Max(
-            panel => panel.X + panel.Width);
-        var bottom = sidePanels.Max(
-            panel => panel.Y + panel.Height);
-        var width = Math.Max(1, right - left);
-        var height = Math.Max(1, bottom - top);
-        var group = new Canvas
+        // Choose the display under the widget centre. Native bounds are physical
+        // pixels, including negative origins and displays with differing DPI.
+        var centerX = requestedX + state.Host.Width / 2;
+        var centerY = requestedY + state.Host.Height / 2;
+        var display = _availableDisplays.FirstOrDefault(candidate =>
+            centerX >= candidate.X && centerX < candidate.X + candidate.Width &&
+            centerY >= candidate.Y && centerY < candidate.Y + candidate.Height) ?? state.Display;
+        var scale = CalculateResolutionScale(display.Width, display.Height);
+        var placementWidth = completed
+            ? Math.Max(1, (int)Math.Ceiling(state.NaturalWidth * scale)) : state.Host.Width;
+        var placementHeight = completed
+            ? Math.Max(1, (int)Math.Ceiling(state.NaturalHeight * scale)) : state.Host.Height;
+        var placement = WidgetPlacementLayout.FromPosition(
+            requestedX - display.X, requestedY - display.Y,
+            display.Width, display.Height, placementWidth, placementHeight,
+            24 * scale, isLocked: false, displayId: display.Id);
+        var position = WidgetPlacementLayout.Resolve(placement,
+            display.Width, display.Height, placementWidth, placementHeight, 24 * scale);
+        state.X = display.X + (int)Math.Round(position.X);
+        state.Y = display.Y + (int)Math.Round(position.Y);
+        state.Display = display;
+        state.Host.MoveTo(state.X, state.Y);
+        state.Editor?.SetBounds(_interactiveHostHandle, state.X, state.Y,
+            state.Host.Width, state.Host.Height, _isWindowVisible);
+        if (completed)
         {
-            Width = width,
-            Height = height,
-            ClipToBounds = false,
-            Background = Brushes.Transparent
-        };
-        foreach (var panel in sidePanels)
-        {
-            Canvas.SetLeft(panel.Visual, panel.X - left);
-            Canvas.SetTop(panel.Visual, panel.Y - top);
-            group.Children.Add(panel.Visual);
-        }
-
-        var host = new BoundedDesktopPanelHost(
-            side == WidgetSide.Left
-                ? "Vellume Alpha Left Widgets"
-                : "Vellume Alpha Right Widgets",
-            _hostHandle,
-            _relativeX + left,
-            _relativeY + top,
-            width,
-            height);
-        host.Render(group);
-        foreach (var panel in sidePanels)
-        {
-            RegisterRenderTarget(panel, left, top);
-        }
-        if (side == WidgetSide.Left)
-        {
-            _leftPanelX = left;
-            _leftPanelY = top;
-            _leftPanelGroupVisual = group;
-            _leftPanelHost = host;
-        }
-        else
-        {
-            _rightPanelX = left;
-            _rightPanelY = top;
-            _rightPanelGroupVisual = group;
-            _rightPanelHost = host;
+            _settings.SetPlacement(kind, placement);
+            RebuildAlphaPanels();
+            UpdateClock();
+            ApplyLastMetrics();
+            ApplyLastCodex();
+            PlacementChanged?.Invoke(this, new WidgetPlacementChangedEventArgs(kind, placement));
         }
     }
+
+    internal IReadOnlyList<nint> EditingHandles => _widgetHosts.Values
+        .Where(state => state.Editor is not null)
+        .Select(state => state.Editor!.Handle)
+        .ToArray();
 
     private void ReattachAlphaPanels()
     {
-        if (_leftPanelHost is not null)
+        foreach (var state in _widgetHosts.Values)
         {
-            _leftPanelHost.AttachTo(
-                _hostHandle,
-                _relativeX + _leftPanelX,
-                _relativeY + _leftPanelY,
-                _leftPanelHost.Width,
-                _leftPanelHost.Height);
+            state.Host.AttachTo(_hostHandle, state.X, state.Y, state.Host.Width, state.Host.Height);
+            state.Editor?.SetBounds(_interactiveHostHandle, state.X, state.Y,
+                state.Host.Width, state.Host.Height, _isWindowVisible);
         }
-
-        if (_rightPanelHost is not null)
-        {
-            _rightPanelHost.AttachTo(
-                _hostHandle,
-                _relativeX + _rightPanelX,
-                _relativeY + _rightPanelY,
-                _rightPanelHost.Width,
-                _rightPanelHost.Height);
-        }
-    }
-
-    private int CalculatePanelX(
-        WidgetSide side,
-        double margin,
-        int panelWidth)
-        => side == WidgetSide.Left
-            ? (int)Math.Round(margin)
-            : _width - (int)Math.Round(margin) - panelWidth;
-
-    private int GetSystemPanelTop()
-    {
-        var clockOffset =
-            _settings.ShowClock &&
-            _settings.ClockSide ==
-            _settings.SystemInfoSide;
-        return clockOffset ? 370 : 330;
     }
 
     internal static double CalculateResolutionScale(int width, int height)
@@ -645,9 +618,6 @@ internal sealed class NativeWidgetRendererWindow
         // it inside wide/portrait displays without stretching text or characters.
         return Math.Min(width / ReferenceDisplayWidth, height / ReferenceDisplayHeight);
     }
-
-    private static int ScalePosition(double referencePosition, double scale)
-        => (int)Math.Round(referencePosition * scale);
 
     private static LayeredPanelVisual PrepareLayeredPanel(
         FrameworkElement element,
@@ -699,218 +669,18 @@ internal sealed class NativeWidgetRendererWindow
 
     private void RenderPanel(WidgetPanelRenderTarget? target)
     {
-        if (target is null)
+        if (target is not null &&
+            _widgetHosts.TryGetValue(target.Kind, out var state) && state.Host.IsReady)
         {
-            return;
-        }
-
-        var host = GetSidePanelHost(target.Side);
-        if (host?.IsReady == true &&
-            target.Visual is not null)
-        {
-            host.RenderRegion(
-                target.Visual,
-                target.X,
-                target.Y,
-                target.Width,
-                target.Height);
-        }
-    }
-
-    private BoundedDesktopPanelHost? GetSidePanelHost(
-        WidgetSide side)
-        => side == WidgetSide.Left
-            ? _leftPanelHost
-            : _rightPanelHost;
-
-    private void RegisterRenderTarget(
-        WidgetPanelPlacement panel,
-        int surfaceLeft,
-        int surfaceTop)
-    {
-        var target = new WidgetPanelRenderTarget(
-            panel.Side,
-            panel.Visual,
-            panel.X - surfaceLeft,
-            panel.Y - surfaceTop,
-            panel.Width,
-            panel.Height);
-        if (ReferenceEquals(panel.Visual, _clockPanelVisual))
-        {
-            _clockRenderTarget = target;
-        }
-        else if (ReferenceEquals(panel.Visual, _systemPanelVisual))
-        {
-            _systemRenderTarget = target;
-        }
-        else if (ReferenceEquals(panel.Visual, _codexPanelVisual))
-        {
-            _codexRenderTarget = target;
+            state.Host.Render(target.Visual);
         }
     }
 
     internal FrameworkElement CreateClock(WidgetSide side)
     {
-        var left = side == WidgetSide.Left;
-        var textAlignment = left
-            ? TextAlignment.Left
-            : TextAlignment.Right;
-        var canvas = new Canvas
-        {
-            Width = 500,
-            Height = 340,
-            ClipToBounds = false
-        };
-        var trace = new Border
-        {
-            Width = 340,
-            Height = 2,
-            Background = new SolidColorBrush(
-                ReferenceCyan)
-        };
-        Canvas.SetLeft(trace, left ? 0 : 160);
-        Canvas.SetTop(trace, 5);
-        canvas.Children.Add(trace);
-
-        var tilted = new Canvas
-        {
-            Width = 430,
-            Height = 300,
-            RenderTransformOrigin = new Point(
-                left ? 0 : 1,
-                0.5),
-            RenderTransform = new RotateTransform(
-                left ? 11 : -11),
-            ClipToBounds = false
-        };
-        Canvas.SetLeft(tilted, 30);
-        Canvas.SetTop(tilted, 15);
-        canvas.Children.Add(tilted);
-
-        var yearBand = new Border
-        {
-            Width = 350,
-            Height = 58,
-            Padding = new Thickness(14, 0, 14, 0),
-            Background = new SolidColorBrush(
-                ReferenceYearBand),
-            BorderBrush = new SolidColorBrush(
-                MikuPalette.WithAlpha(
-                    Colors.White,
-                    210)),
-            BorderThickness = new Thickness(0, 1, 0, 1)
-        };
-        _clockYear = CreateOutlinedVectorText(
-            52,
-            FontWeights.SemiBold,
-            ReferenceNavy,
-            1.05);
-        _clockYear.Width = 322;
-        _clockYear.TextAlignment = textAlignment;
-        _clockYear.VerticalAlignment =
-            VerticalAlignment.Center;
-        yearBand.Child = _clockYear;
-        Canvas.SetLeft(yearBand, left ? 0 : 80);
-        Canvas.SetTop(yearBand, 0);
-        tilted.Children.Add(yearBand);
-
-        var band = new Border
-        {
-            Width = 420,
-            Height = 62,
-            Background = new SolidColorBrush(
-                ReferenceDateBand),
-            BorderBrush = new SolidColorBrush(
-                ReferenceCyan),
-            BorderThickness = left
-                ? new Thickness(7, 0, 0, 0)
-                : new Thickness(0, 0, 7, 0)
-        };
-        var bandContent = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = left
-                ? HorizontalAlignment.Left
-                : HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(18, 0, 18, 0)
-        };
-        _clockWeekday = CreateOutlinedVectorText(
-            34,
-            FontWeights.SemiBold,
-            ReferenceCyan,
-            0.85);
-        _clockDay = CreateOutlinedVectorText(
-            50,
-            FontWeights.Bold,
-            Colors.White,
-            0.9,
-            ReferenceNavy);
-        if (left)
-        {
-            bandContent.Children.Add(_clockDay);
-            bandContent.Children.Add(CreateSpacer(18));
-            bandContent.Children.Add(_clockWeekday);
-        }
-        else
-        {
-            bandContent.Children.Add(_clockWeekday);
-            bandContent.Children.Add(CreateSpacer(18));
-            bandContent.Children.Add(_clockDay);
-        }
-        band.Child = bandContent;
-        Canvas.SetTop(band, 58);
-        tilted.Children.Add(band);
-
-        var monthBand = new Border
-        {
-            Width = 330,
-            Height = 40,
-            Padding = new Thickness(14, 0, 14, 0),
-            Background = new SolidColorBrush(
-                ReferenceMonthBand),
-            BorderThickness = new Thickness(0)
-        };
-        _clockMonth = CreateOutlinedVectorText(
-            25,
-            FontWeights.SemiBold,
-            ReferenceNavy,
-            0.8);
-        _clockMonth.Width = 300;
-        _clockMonth.TextAlignment = textAlignment;
-        _clockMonth.VerticalAlignment =
-            VerticalAlignment.Center;
-        monthBand.Child = _clockMonth;
-        Canvas.SetLeft(monthBand, left ? 0 : 90);
-        Canvas.SetTop(monthBand, 120);
-        tilted.Children.Add(monthBand);
-
-        var timeBand = new Border
-        {
-            Width = 300,
-            Height = 66,
-            Padding = new Thickness(15, 0, 15, 0),
-            Background = new SolidColorBrush(
-                ReferenceTimeBand),
-            BorderThickness = new Thickness(0)
-        };
-        _clockTime = CreateOutlinedVectorText(
-            58,
-            FontWeights.Light,
-            ReferenceCyan,
-            0.85);
-        _clockTime.Width = 270;
-        _clockTime.TextAlignment = textAlignment;
-        _clockTime.HorizontalAlignment = left
-            ? HorizontalAlignment.Left
-            : HorizontalAlignment.Right;
-        _clockTime.VerticalAlignment =
-            VerticalAlignment.Center;
-        timeBand.Child = _clockTime;
-        Canvas.SetLeft(timeBand, left ? 0 : 120);
-        Canvas.SetTop(timeBand, 160);
-        tilted.Children.Add(timeBand);
-        return canvas;
+        _simpleClock = new SimpleClockVisual(_settings.ClockStyle);
+        _simpleClock.Update(DateTime.Now);
+        return _simpleClock;
     }
 
     internal FrameworkElement CreateSystemPanel(WidgetSide side)
@@ -1552,59 +1322,8 @@ internal sealed class NativeWidgetRendererWindow
 
     internal void UpdateClock()
     {
-        if (_disposed)
+        if (!_disposed && _simpleClock?.Update(DateTime.Now) == true)
         {
-            return;
-        }
-
-        var now = DateTime.Now;
-        if (_clockTime is not null)
-        {
-            var time = now.ToString(
-                "HH:mm",
-                CultureInfo.InvariantCulture);
-            var year = now.Year.ToString(
-                CultureInfo.InvariantCulture);
-            var weekday = now.ToString(
-                    "dddd",
-                    CultureInfo.InvariantCulture)
-                .ToUpperInvariant();
-            var day = now.Day.ToString(
-                "00",
-                CultureInfo.InvariantCulture);
-            var month = now.ToString(
-                    "MMM",
-                    CultureInfo.InvariantCulture)
-                .ToUpperInvariant();
-            if (string.Equals(
-                    _clockTime.Text,
-                    time,
-                    StringComparison.Ordinal) &&
-                string.Equals(
-                    _clockYear!.Text,
-                    year,
-                    StringComparison.Ordinal) &&
-                string.Equals(
-                    _clockWeekday!.Text,
-                    weekday,
-                    StringComparison.Ordinal) &&
-                string.Equals(
-                    _clockDay!.Text,
-                    day,
-                    StringComparison.Ordinal) &&
-                string.Equals(
-                    _clockMonth!.Text,
-                    month,
-                    StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            _clockTime.Text = time;
-            _clockYear!.Text = year;
-            _clockWeekday!.Text = weekday;
-            _clockDay!.Text = day;
-            _clockMonth!.Text = month;
             RenderClockPanel();
         }
     }
@@ -1873,17 +1592,7 @@ internal sealed class NativeWidgetRendererWindow
     }
 
     private IEnumerable<BoundedDesktopPanelHost> EnumeratePanelHosts()
-    {
-        if (_leftPanelHost is not null)
-        {
-            yield return _leftPanelHost;
-        }
-
-        if (_rightPanelHost is not null)
-        {
-            yield return _rightPanelHost;
-        }
-    }
+        => _widgetHosts.Values.Select(state => state.Host);
 
     private void ClockTimerOnTick(
         object? sender,
@@ -1902,19 +1611,19 @@ internal sealed class NativeWidgetRendererWindow
         {
             _clockTimer.Stop();
             var now = DateTime.Now;
-            var nextMinute = new DateTime(
+            var nextTick = new DateTime(
                     now.Year,
                     now.Month,
                     now.Day,
                     now.Hour,
                     now.Minute,
-                    0,
+                    _simpleClock?.NeedsSeconds == true ? now.Second : 0,
                     now.Kind)
-                .AddMinutes(1);
+                .AddSeconds(_simpleClock?.NeedsSeconds == true ? 1 : 60);
             _clockTimer.Interval = TimeSpan.FromMilliseconds(
                 Math.Max(
                     100,
-                    (nextMinute - now).TotalMilliseconds + 25));
+                    (nextTick - now).TotalMilliseconds + 25));
             _clockTimer.Start();
         }
         else
@@ -1927,11 +1636,7 @@ internal sealed class NativeWidgetRendererWindow
     {
         StopCodexAnimation();
         _gauges.Clear();
-        _clockYear = null;
-        _clockWeekday = null;
-        _clockDay = null;
-        _clockMonth = null;
-        _clockTime = null;
+        _simpleClock = null;
         _codexHeadline = null;
         _codexProjects = null;
         _codexUsageLimits = null;
@@ -2197,27 +1902,23 @@ internal sealed class NativeWidgetRendererWindow
               $"{FormatBytes(drive.TotalBytes)}"
             : "사용할 수 없음";
 
-    private bool HasPanelsOnSide(WidgetSide side)
-        => (_settings.ShowClock &&
-            _settings.ClockSide == side) ||
-           (_settings.ShowSystemInfo &&
-            _settings.SystemInfoSide == side) ||
-           (_settings.ShowCodexCompanion &&
-            CodexPanelSide == side);
-
-    private sealed record WidgetPanelPlacement(
-        WidgetSide Side,
-        FrameworkElement Visual,
-        int X,
-        int Y,
-        int Width,
-        int Height);
+    private sealed class WidgetHostState(
+        WidgetKind kind, BoundedDesktopPanelHost host, DisplayInfo display, int x, int y,
+        double naturalWidth, double naturalHeight)
+    {
+        internal WidgetKind Kind { get; } = kind;
+        internal BoundedDesktopPanelHost Host { get; } = host;
+        internal DisplayInfo Display { get; set; } = display;
+        internal int X { get; set; } = x;
+        internal int Y { get; set; } = y;
+        internal double NaturalWidth { get; } = naturalWidth;
+        internal double NaturalHeight { get; } = naturalHeight;
+        internal WidgetEditingOverlayWindow? Editor { get; set; }
+    }
 
     private sealed record WidgetPanelRenderTarget(
-        WidgetSide Side,
+        WidgetKind Kind,
         FrameworkElement Visual,
-        int X,
-        int Y,
         int Width,
         int Height);
 

@@ -12,6 +12,11 @@ public interface IWallpaperController : IAsyncDisposable
     event EventHandler<int>? QuickSlotInvoked;
     event EventHandler<int>? QuickSlotSecondaryInvoked;
     event EventHandler<QuickSlotLayoutChangedEventArgs>? QuickSlotLayoutChanged;
+    event EventHandler<WidgetPlacementChangedEventArgs>? WidgetPlacementChanged
+    {
+        add { }
+        remove { }
+    }
 
     Task ApplyAsync(
         WallpaperItem wallpaper,
@@ -50,6 +55,18 @@ public interface IWallpaperController : IAsyncDisposable
         CancellationToken cancellationToken = default);
     Task CompleteDesktopWallpaperHandoffAsync(
         CancellationToken cancellationToken = default);
+}
+
+public sealed class WidgetPlacementChangedEventArgs : EventArgs
+{
+    public WidgetPlacementChangedEventArgs(WidgetKind kind, WidgetPlacement placement)
+    {
+        Kind = kind;
+        Placement = placement.Copy();
+    }
+
+    public WidgetKind Kind { get; }
+    public WidgetPlacement Placement { get; }
 }
 
 public interface ISystemShortcutService

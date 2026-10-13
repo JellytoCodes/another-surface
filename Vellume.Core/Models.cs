@@ -44,6 +44,67 @@ public enum WidgetSide
     Right
 }
 
+public enum ClockStyle
+{
+    AnalogMinimal,
+    AnalogNumerals,
+    DigitalClean,
+    DigitalStacked,
+    DigitalMono
+}
+
+public enum WidgetKind
+{
+    Clock,
+    SystemInfo,
+    CodexCompanion
+}
+
+public enum WidgetAnchor
+{
+    TopLeft,
+    TopCenter,
+    TopRight,
+    CenterLeft,
+    Center,
+    CenterRight,
+    BottomLeft,
+    BottomCenter,
+    BottomRight,
+    Custom
+}
+
+public sealed class WidgetPlacement
+{
+    public WidgetAnchor Anchor { get; set; } = WidgetAnchor.TopRight;
+    public bool IsLocked { get; set; } = true;
+    // Custom coordinates use the available travel after the display's safe
+    // margin and widget size: 0 is its first edge, 0.5 its center, 1 its last.
+    public double X { get; set; } = 0.5;
+    public double Y { get; set; } = 0.5;
+    public string? DisplayId { get; set; }
+
+    public WidgetPlacement Copy(WidgetAnchor fallbackAnchor = WidgetAnchor.TopRight)
+        => new()
+        {
+            Anchor = Enum.IsDefined(Anchor) ? Anchor : fallbackAnchor,
+            IsLocked = IsLocked,
+            X = NormalizeCoordinate(X),
+            Y = NormalizeCoordinate(Y),
+            DisplayId = string.IsNullOrWhiteSpace(DisplayId)
+                ? null
+                : DisplayId.Trim()
+        };
+
+    public static WidgetPlacement FromAnchor(
+        WidgetAnchor anchor,
+        bool isLocked = true)
+        => new() { Anchor = anchor, IsLocked = isLocked };
+
+    internal static double NormalizeCoordinate(double value)
+        => double.IsFinite(value) ? Math.Clamp(value, 0, 1) : 0.5;
+}
+
 public enum SystemShortcutKind
 {
     ThisPc,
@@ -392,6 +453,10 @@ public sealed class QuickSlotGroup
 
 public sealed class WidgetSettings
 {
+    private WidgetPlacement? _clockPlacement;
+    private WidgetPlacement? _systemInfoPlacement;
+    private WidgetPlacement? _codexPlacement;
+
     public bool IsEnabled { get; set; } = true;
     public bool ShowClock { get; set; } = true;
     public bool ShowSystemInfo { get; set; } = true;
@@ -399,9 +464,32 @@ public sealed class WidgetSettings
     public bool ShowCodexCompanion { get; set; } = true;
     public WidgetSide ClockSide { get; set; } = WidgetSide.Right;
     public WidgetSide SystemInfoSide { get; set; } = WidgetSide.Right;
-    // Retained for backward-compatible JSON reads. The companion has a
-    // fixed upper-left placement so it remains predictable.
+    // Legacy side properties remain readable for older settings. Explicit
+    // placements take precedence, and absent companion placement starts left.
     public WidgetSide CodexCompanionSide { get; set; } = WidgetSide.Left;
+    public ClockStyle ClockStyle { get; set; } = ClockStyle.DigitalClean;
+    public WidgetPlacement ClockPlacement
+    {
+        get => _clockPlacement ??= WidgetPlacement.FromAnchor(
+            ClockSide == WidgetSide.Left
+                ? WidgetAnchor.TopLeft
+                : WidgetAnchor.TopRight);
+        set => _clockPlacement = value;
+    }
+    public WidgetPlacement SystemInfoPlacement
+    {
+        get => _systemInfoPlacement ??= WidgetPlacement.FromAnchor(
+            SystemInfoSide == WidgetSide.Left
+                ? WidgetAnchor.CenterLeft
+                : WidgetAnchor.CenterRight);
+        set => _systemInfoPlacement = value;
+    }
+    public WidgetPlacement CodexPlacement
+    {
+        get => _codexPlacement ??=
+            WidgetPlacement.FromAnchor(WidgetAnchor.TopLeft);
+        set => _codexPlacement = value;
+    }
     public bool SnapQuickSlotsToGrid { get; set; } = true;
     public int QuickSlotGridSize { get; set; } = 40;
     public List<QuickSlotItem> QuickSlots { get; set; } = [];
@@ -413,7 +501,8 @@ public sealed class WidgetSettings
     public WidgetSettings Copy()
     {
         var gridSize = Math.Clamp(QuickSlotGridSize, 10, 200);
-        var groups = QuickSlotGroups
+        var groups = (QuickSlotGroups ?? [])
+            .OfType<QuickSlotGroup>()
             .Where(group => !string.IsNullOrWhiteSpace(group.Id))
             .GroupBy(group => group.Id, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First().Copy())
@@ -435,7 +524,8 @@ public sealed class WidgetSettings
             .Select(group => group.Id)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var fallbackGroupId = groups[0].Id;
-        var slots = QuickSlots
+        var slots = (QuickSlots ?? [])
+            .OfType<QuickSlotItem>()
             .Where(item => item.Slot is >= 1 and <= 99)
             .OrderBy(item => item.Slot)
             .GroupBy(item => item.Slot)
@@ -456,6 +546,7 @@ public sealed class WidgetSettings
             })
             .ToList();
         var existingSystemShortcuts = (SystemShortcuts ?? [])
+            .OfType<SystemShortcutSetting>()
             .GroupBy(item => item.Kind)
             .ToDictionary(group => group.Key, group => group.First());
         var systemShortcuts = SystemShortcutSetting.CreateDefaults()
@@ -495,15 +586,49 @@ public sealed class WidgetSettings
             ShowSystemInfo = ShowSystemInfo,
             ShowQuickSlots = ShowQuickSlots,
             ShowCodexCompanion = ShowCodexCompanion,
-            ClockSide = ClockSide,
-            SystemInfoSide = SystemInfoSide,
+            ClockSide = Enum.IsDefined(ClockSide) ? ClockSide : WidgetSide.Right,
+            SystemInfoSide = Enum.IsDefined(SystemInfoSide) ? SystemInfoSide : WidgetSide.Right,
             CodexCompanionSide = WidgetSide.Left,
+            ClockStyle = Enum.IsDefined(ClockStyle)
+                ? ClockStyle
+                : ClockStyle.DigitalClean,
+            ClockPlacement = ClockPlacement.Copy(WidgetAnchor.TopRight),
+            SystemInfoPlacement = SystemInfoPlacement.Copy(WidgetAnchor.CenterRight),
+            CodexPlacement = CodexPlacement.Copy(WidgetAnchor.TopLeft),
             SnapQuickSlotsToGrid = SnapQuickSlotsToGrid,
             QuickSlotGridSize = gridSize,
             QuickSlots = slots,
             SystemShortcuts = systemShortcuts,
             QuickSlotGroups = groups
         };
+    }
+
+    public WidgetPlacement GetPlacement(WidgetKind kind)
+        => kind switch
+        {
+            WidgetKind.Clock => ClockPlacement,
+            WidgetKind.SystemInfo => SystemInfoPlacement,
+            WidgetKind.CodexCompanion => CodexPlacement,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind))
+        };
+
+    public void SetPlacement(WidgetKind kind, WidgetPlacement placement)
+    {
+        ArgumentNullException.ThrowIfNull(placement);
+        switch (kind)
+        {
+            case WidgetKind.Clock:
+                ClockPlacement = placement.Copy(WidgetAnchor.TopRight);
+                break;
+            case WidgetKind.SystemInfo:
+                SystemInfoPlacement = placement.Copy(WidgetAnchor.CenterRight);
+                break;
+            case WidgetKind.CodexCompanion:
+                CodexPlacement = placement.Copy(WidgetAnchor.TopLeft);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind));
+        }
     }
 
     public IReadOnlyList<QuickSlotItem> GetDesktopQuickSlots(
@@ -563,7 +688,8 @@ public sealed class WidgetSettings
 
 public sealed class AppSettings
 {
-    public int SchemaVersion { get; set; } = 18;
+    public const int CurrentSchemaVersion = 19;
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
     public List<WallpaperItem> Library { get; set; } = [];
     public WallpaperItem? ActiveWallpaper { get; set; }
     public string? SelectedMonitorId { get; set; }

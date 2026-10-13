@@ -18,6 +18,17 @@ namespace Vellume.App;
 
 public partial class MainWindow : Window
 {
+    public static readonly DependencyProperty IsWallpaperApplyingProperty =
+        DependencyProperty.Register(
+            nameof(IsWallpaperApplying), typeof(bool), typeof(MainWindow),
+            new PropertyMetadata(false));
+
+    public bool IsWallpaperApplying
+    {
+        get => (bool)GetValue(IsWallpaperApplyingProperty);
+        private set => SetValue(IsWallpaperApplyingProperty, value);
+    }
+
     private readonly AppSettings _settings;
     private readonly ISettingsStore _settingsStore;
     private readonly IWallpaperController _wallpaperController;
@@ -40,6 +51,7 @@ public partial class MainWindow : Window
     private readonly VideoProxyCache _videoMetadata = new();
     private string _libraryFilter = "All";
     private CancellationTokenSource? _wallpaperApplyCancellation;
+    private string? _applyingDisplayId;
     private HwndSource? _windowSource;
     private bool _initialized;
     private bool _runtimeRefreshInProgress;
@@ -97,9 +109,11 @@ public partial class MainWindow : Window
             WallpaperController_QuickSlotSecondaryInvoked;
         _wallpaperController.QuickSlotLayoutChanged +=
             WallpaperController_QuickSlotLayoutChanged;
+        _wallpaperController.WidgetPlacementChanged += WallpaperController_WidgetPlacementChanged;
         _hotkeyManager.SlotInvoked += QuickSlotHotkeyManager_SlotInvoked;
         SourceInitialized += Window_SourceInitialized;
         IsVisibleChanged += Window_IsVisibleChanged;
+        InitializeWidgetControls();
     }
 
     public ObservableCollection<WallpaperItem> Library { get; } = [];
@@ -145,6 +159,8 @@ public partial class MainWindow : Window
                 null)
             ?.Cancel();
         _quickSlotRuntimeTimer.Stop();
+        _clockPreviewTimer?.Stop();
+        _wallpaperController.WidgetPlacementChanged -= WallpaperController_WidgetPlacementChanged;
         _quickSlotRuntimeTimer.Tick -=
             QuickSlotRuntimeTimerOnTick;
         IsVisibleChanged -= Window_IsVisibleChanged;
@@ -185,6 +201,8 @@ public partial class MainWindow : Window
                 Library.Add(wallpaper);
             }
             LibraryList.ItemsSource = Library;
+            Library.CollectionChanged += Library_CollectionChanged;
+            RefreshLibraryFilter();
 
             DisplayList.ItemsSource = Displays;
             RefreshDisplays();
@@ -222,22 +240,7 @@ public partial class MainWindow : Window
 
             _settings.Widgets ??= new WidgetSettings();
             _settings.Dock ??= new DockSettings();
-            var sideOptions = new[]
-            {
-                new SelectionOption<WidgetSide>(
-                    WidgetSide.Left,
-                    "왼쪽"),
-                new SelectionOption<WidgetSide>(
-                    WidgetSide.Right,
-                    "오른쪽")
-            };
-            ClockSideComboBox.ItemsSource = sideOptions;
-            ClockSideComboBox.SelectedItem = sideOptions.First(option =>
-                option.Value == _settings.Widgets.ClockSide);
-            SystemSideComboBox.ItemsSource = sideOptions;
-            SystemSideComboBox.SelectedItem = sideOptions.First(option =>
-                option.Value == _settings.Widgets.SystemInfoSide);
-            _settings.Widgets.CodexCompanionSide = WidgetSide.Left;
+            RefreshWidgetPlacementControls();
             SnapQuickSlotsCheckBox.IsChecked =
                 _settings.Widgets.SnapQuickSlotsToGrid;
             QuickSlotGridSizeComboBox.ItemsSource =
@@ -395,6 +398,7 @@ public partial class MainWindow : Window
 
         using var cancellation = new CancellationTokenSource();
         _wallpaperApplyCancellation = cancellation;
+        IsWallpaperApplying = true;
         try
         {
         var display = targetDisplay ??
@@ -416,23 +420,25 @@ public partial class MainWindow : Window
         try
         {
             display = FindCurrentDisplay(display);
-            HomeStatusText.Text = "재생 엔진을 준비하고 바탕화면에 연결하는 중…";
+            _applyingDisplayId = display.Id;
+            HomeStatusText.Text = $"'{wallpaper.Name}' → {display.Name} 적용 중…";
             SidebarStatusText.Text = "적용 중…";
             var profile = _settings.GetOrCreateDisplayProfile(display.Id);
+            var playback = profile.Playback.Copy();
             var playbackWallpaper = wallpaper;
             var generatedProxy = false;
             if (wallpaper.Kind == WallpaperKind.Video &&
-                (profile.Playback.UseOptimizedVideo || wallpaper.HasVideoRange))
+                (playback.UseOptimizedVideo || wallpaper.HasVideoRange))
             {
                 HomeStatusText.Text =
-                    wallpaper.HasVideoRange ? "선택 구간의 재생 캐시를 준비하는 중… (최초 생성 시 시간이 걸릴 수 있습니다)"
-                        : "디스플레이에 맞는 저전력 영상 캐시를 준비하는 중…";
+                    wallpaper.HasVideoRange ? "재생 구간 준비 중…"
+                        : "영상 준비 중…";
                 var preparation = await _libraryStore.PrepareForPlaybackAsync(
                     wallpaper,
                     display.Width,
                     display.Height,
                     cancellation.Token,
-                    optimize: profile.Playback.UseOptimizedVideo);
+                    optimize: playback.UseOptimizedVideo);
                 playbackWallpaper = preparation.Wallpaper;
                 generatedProxy = preparation.GeneratedProxy;
                 await _logger.InfoAsync(
@@ -449,17 +455,22 @@ public partial class MainWindow : Window
             // A controller can retain the new session even if visibility/logging
             // fails late in Apply. Keep both old and candidate sources on failure.
             protectedSources.Add(playbackWallpaper.SourcePath);
+            cancellation.Token.ThrowIfCancellationRequested();
             await _wallpaperController.ApplyAsync(
                 playbackWallpaper,
                 display,
-                profile.Playback.Copy(),
+                playback,
                 _settings.Widgets.Copy(),
                 cancellation.Token);
+            cancellation.Token.ThrowIfCancellationRequested();
             protectedSources.Clear();
             protectedSources.Add(playbackWallpaper.SourcePath);
             // Display topology can change while video preparation or renderer
             // initialization is awaited. Update the current card, not its old snapshot.
             display = FindCurrentDisplay(display);
+            // Saving another display selection can replace profile objects while
+            // preparation is awaited. Commit to the current settings instance.
+            profile = _settings.GetOrCreateDisplayProfile(display.Id);
             profile.Wallpaper = wallpaper.Copy();
             display.HasAssignedWallpaper = true;
             display.IsWallpaperPaused = false;
@@ -472,10 +483,10 @@ public partial class MainWindow : Window
                 _settings.SelectedMonitorId = display.Id;
                 _settings.Playback = profile.Playback.Copy();
                 NowPlayingText.Text = wallpaper.Name;
-                LibraryList.SelectedItem = wallpaper;
             }
             display.AssignedWallpaperName = wallpaper.Name;
             DisplayList.Items.Refresh();
+            HomeStatusText.Text = $"'{wallpaper.Name}'을(를) {display.Name}에 적용했습니다.";
             await SaveSettingsAsync();
             await MaintainVideoCacheAsync(force: generatedProxy);
         }
@@ -507,6 +518,8 @@ public partial class MainWindow : Window
                 null,
                 cancellation);
             _wallpaperApplyGate.Release();
+            _applyingDisplayId = null;
+            IsWallpaperApplying = false;
         }
     }
 
@@ -732,18 +745,15 @@ public partial class MainWindow : Window
 
     private void ShowPage(WpfGrid page)
     {
-        HomePage.Visibility = Visibility.Collapsed;
-        LibraryPage.Visibility = Visibility.Collapsed;
+        WallpaperPage.Visibility = Visibility.Collapsed;
         WidgetsPage.Visibility = Visibility.Collapsed;
         SettingsPage.Visibility = Visibility.Collapsed;
         page.Visibility = Visibility.Visible;
+        UpdateClockPreviewTimer();
     }
 
-    private void HomeNavigation_Click(object sender, RoutedEventArgs eventArgs)
-        => ShowPage(HomePage);
-
-    private void LibraryNavigation_Click(object sender, RoutedEventArgs eventArgs)
-        => ShowPage(LibraryPage);
+    private void WallpaperNavigation_Click(object sender, RoutedEventArgs eventArgs)
+        => ShowPage(WallpaperPage);
 
     private void WidgetsNavigation_Click(object sender, RoutedEventArgs eventArgs)
         => ShowPage(WidgetsPage);
@@ -755,21 +765,92 @@ public partial class MainWindow : Window
     {
         if (sender is WpfButton { Tag: WallpaperItem wallpaper })
         {
+            LibraryList.SelectedItem = wallpaper;
             await ApplyWallpaperAsync(wallpaper);
+        }
+    }
+
+    private async void ApplySelectedButton_Click(object sender, RoutedEventArgs eventArgs)
+    {
+        if (LibraryList.SelectedItem is WallpaperItem wallpaper &&
+            DisplayList.SelectedItem is DisplayInfo display)
+        {
+            await ApplyWallpaperAsync(wallpaper, targetDisplay: display);
+        }
+    }
+
+    private void LibraryList_SelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        // Keep content selection independent of the display's current wallpaper.
+        // Users can choose either the content or the destination first.
+        if (_initialized && !IsWallpaperApplying)
+        {
+            UpdateSelectedDisplayStatus();
         }
     }
 
     private void LibraryFilter_Click(object sender, RoutedEventArgs args)
     {
-        if (sender is not WpfButton { Tag: string filter } button) return;
+        if (sender is not WpfButton { Tag: string filter }) return;
+        SetLibraryFilter(filter);
+    }
+
+    private void SetLibraryFilter(string filter)
+    {
         _libraryFilter = filter;
+        foreach (var button in LibraryFilterBar.Children.OfType<WpfButton>())
+        {
+            button.Background = (System.Windows.Media.Brush)FindResource(
+                Equals(button.Tag, filter) ? "AccentBrush" : "SurfaceBrush");
+        }
+        RefreshLibraryFilter();
+    }
+
+    private void LibrarySearchBox_TextChanged(object sender, TextChangedEventArgs args)
+    {
+        if (_initialized) RefreshLibraryFilter();
+    }
+
+    private void Library_CollectionChanged(object? sender,
+        System.Collections.Specialized.NotifyCollectionChangedEventArgs args)
+        => UpdateLibrarySummary();
+
+    private void RefreshLibraryFilter()
+    {
+        var search = LibrarySearchBox.Text.Trim();
         System.Windows.Data.CollectionViewSource.GetDefaultView(Library).Filter = item =>
             item is WallpaperItem wallpaper &&
-            (_libraryFilter == "All" || wallpaper.Kind.ToString() == _libraryFilter);
-        LibraryFilterLabel.Text = $"{button.Content} 보기";
-        if (button.Parent is StackPanel panel)
-            foreach (var child in panel.Children.OfType<WpfButton>())
-                child.Background = (System.Windows.Media.Brush)FindResource(ReferenceEquals(child, button) ? "AccentBrush" : "SurfaceBrush");
+            (_libraryFilter == "All" || wallpaper.Kind.ToString() == _libraryFilter) &&
+            (search.Length == 0 || wallpaper.Name.Contains(search, StringComparison.OrdinalIgnoreCase));
+        UpdateLibrarySummary();
+    }
+
+    private void UpdateLibrarySummary()
+    {
+        LibraryFilterLabel.Text = $"{LibraryList.Items.Count}개";
+        LibraryEmptyText.Text = Library.Count == 0
+            ? "등록된 콘텐츠 없음"
+            : "검색 결과 없음";
+    }
+
+    private void SelectImportedWallpaper(WallpaperItem wallpaper)
+    {
+        // A different kind filter or search must not hide the newly imported item.
+        LibrarySearchBox.Clear();
+        SetLibraryFilter("All");
+        LibraryList.SelectedItem = wallpaper;
+        LibraryList.ScrollIntoView(wallpaper);
+    }
+
+    private void WallpaperThumbnail_DataContextChanged(object sender, DependencyPropertyChangedEventArgs args)
+    {
+        if (sender is System.Windows.Controls.Image image)
+        {
+            // Recycling can rebind a visible image without raising Loaded again.
+            image.Source = null;
+            image.ToolTip = null;
+            if (image.IsLoaded) WallpaperThumbnail_Loaded(image, new RoutedEventArgs());
+        }
     }
 
     private async void WallpaperThumbnail_Loaded(object sender, RoutedEventArgs args)
@@ -834,17 +915,25 @@ public partial class MainWindow : Window
         object sender,
         MouseButtonEventArgs eventArgs)
     {
+        ListBoxItem? clickedItem = null;
         for (var current = eventArgs.OriginalSource as DependencyObject;
              current is not null;
-             current = VisualTreeHelper.GetParent(current))
+             current = current is Visual or System.Windows.Media.Media3D.Visual3D
+                 ? VisualTreeHelper.GetParent(current)
+                 : LogicalTreeHelper.GetParent(current))
         {
             if (current is WpfButton)
             {
                 return;
             }
+            if (current is ListBoxItem item)
+            {
+                clickedItem = item;
+                break;
+            }
         }
 
-        if (LibraryList.SelectedItem is WallpaperItem wallpaper)
+        if (clickedItem?.DataContext is WallpaperItem wallpaper)
         {
             await ApplyWallpaperAsync(wallpaper);
         }
@@ -868,10 +957,13 @@ public partial class MainWindow : Window
         }
 
         var gateEntered = false;
+        var applyGateEntered = false;
         try
         {
             await _libraryMutationGate.WaitAsync(_libraryLifetime.Token);
             gateEntered = true;
+            await _wallpaperApplyGate.WaitAsync(_libraryLifetime.Token);
+            applyGateEntered = true;
 
             var assignedProfiles = _settings.DisplayWallpapers
                 .Where(profile => profile.Wallpaper?.Id == wallpaper.Id)
@@ -879,14 +971,12 @@ public partial class MainWindow : Window
             foreach (var profile in assignedProfiles)
             {
                 await _wallpaperController.StopDisplayAsync(profile.DisplayId);
-                profile.Wallpaper = null;
-                var display = Displays.FirstOrDefault(candidate =>
-                    candidate.Id.Equals(
-                        profile.DisplayId,
-                        StringComparison.OrdinalIgnoreCase));
-                if (display is not null)
+                _settings.GetOrCreateDisplayProfile(profile.DisplayId).Wallpaper = null;
+                if (_displayStateCache.TryGetValue(profile.DisplayId, out var display))
                 {
                     display.AssignedWallpaperName = "미적용";
+                    display.HasAssignedWallpaper = false;
+                    display.IsWallpaperPaused = false;
                 }
             }
             if (_settings.ActiveWallpaper?.Id == wallpaper.Id)
@@ -896,6 +986,7 @@ public partial class MainWindow : Window
 
             Library.Remove(wallpaper);
             DisplayList.Items.Refresh();
+            UpdateSelectedDisplayStatus();
             await SaveSettingsAsync();
             try
             {
@@ -922,6 +1013,7 @@ public partial class MainWindow : Window
         }
         finally
         {
+            if (applyGateEntered) _wallpaperApplyGate.Release();
             if (gateEntered)
             {
                 _libraryMutationGate.Release();
@@ -975,7 +1067,7 @@ public partial class MainWindow : Window
                 IsSameImportSource(item, fullPath));
             if (existing is not null)
             {
-                LibraryList.SelectedItem = existing;
+                SelectImportedWallpaper(existing);
                 return;
             }
 
@@ -985,7 +1077,7 @@ public partial class MainWindow : Window
                 fullPath,
                 cancellationToken: _libraryLifetime.Token);
             Library.Add(wallpaper);
-            LibraryList.SelectedItem = wallpaper;
+            SelectImportedWallpaper(wallpaper);
             try
             {
                 await SaveSettingsAsync();
@@ -1041,8 +1133,13 @@ public partial class MainWindow : Window
         object sender,
         RoutedEventArgs eventArgs)
     {
+        var applyGateEntered = false;
         try
         {
+            _wallpaperApplyCancellation?.Cancel();
+            await _wallpaperApplyGate.WaitAsync(_libraryLifetime.Token);
+            applyGateEntered = true;
+            IsWallpaperApplying = true;
             await _wallpaperController.StopAsync();
             foreach (var profile in _settings.DisplayWallpapers)
             {
@@ -1057,13 +1154,23 @@ public partial class MainWindow : Window
             _settings.ActiveWallpaper = null;
             NowPlayingText.Text = "적용된 월페이퍼 없음";
             DisplayList.Items.Refresh();
+            HomeStatusText.Text = "모든 디스플레이의 월페이퍼를 중지했습니다.";
             await SaveSettingsAsync();
         }
+        catch (OperationCanceledException) when (_runtimeClosing) { }
         catch (Exception exception)
         {
             await ReportErrorAsync(
                 "모든 월페이퍼를 안전하게 중지하지 못했습니다.",
                 exception);
+        }
+        finally
+        {
+            if (applyGateEntered)
+            {
+                IsWallpaperApplying = false;
+                _wallpaperApplyGate.Release();
+            }
         }
     }
 
@@ -1123,37 +1230,103 @@ public partial class MainWindow : Window
 
     private async Task StopDisplayCoreAsync(DisplayInfo display)
     {
-        await _wallpaperController.StopDisplayAsync(display.Id);
-        display = FindCurrentDisplay(display);
-        var profile = _settings.GetOrCreateDisplayProfile(display.Id);
-        profile.Wallpaper = null;
-        display.AssignedWallpaperName = "미적용";
-        display.HasAssignedWallpaper = false;
-        display.IsWallpaperPaused = false;
-        _settings.ActiveWallpaper = null;
-        NowPlayingText.Text = "선택 화면에 적용된 월페이퍼 없음";
-        DisplayList.Items.Refresh();
-        await SaveSettingsAsync();
+        if (display.Id.Equals(_applyingDisplayId, StringComparison.OrdinalIgnoreCase))
+        {
+            _wallpaperApplyCancellation?.Cancel();
+        }
+        await _wallpaperApplyGate.WaitAsync(_libraryLifetime.Token);
+        try
+        {
+            IsWallpaperApplying = true;
+            await _wallpaperController.StopDisplayAsync(display.Id);
+            display = FindCurrentDisplay(display);
+            var profile = _settings.GetOrCreateDisplayProfile(display.Id);
+            profile.Wallpaper = null;
+            display.AssignedWallpaperName = "미적용";
+            display.HasAssignedWallpaper = false;
+            display.IsWallpaperPaused = false;
+            if (DisplayList.SelectedItem is DisplayInfo selected &&
+                selected.Id.Equals(display.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                _settings.ActiveWallpaper = null;
+            }
+            UpdateSelectedDisplayStatus();
+            DisplayList.Items.Refresh();
+            HomeStatusText.Text = $"{display.Name}의 월페이퍼를 중지했습니다.";
+            await SaveSettingsAsync();
+        }
+        finally
+        {
+            IsWallpaperApplying = false;
+            _wallpaperApplyGate.Release();
+        }
     }
 
     private async void DisplayList_SelectionChanged(
         object sender,
         SelectionChangedEventArgs eventArgs)
     {
-        if (!_initialized || _refreshingDisplays ||
-            DisplayList.SelectedItem is not DisplayInfo display)
+        if (!_initialized || _refreshingDisplays)
         {
             return;
         }
+        if (DisplayList.SelectedItem is not DisplayInfo display)
+        {
+            UpdateSelectedDisplayStatus();
+            return;
+        }
 
-        _settings.SelectedMonitorId = display.Id;
-        var profile = _settings.GetOrCreateDisplayProfile(display.Id);
-        _settings.Playback = profile.Playback.Copy();
-        ApplyPlaybackProfileToControls(profile.Playback);
-        NowPlayingText.Text =
-            profile.Wallpaper?.Name ??
-            "선택 화면에 적용된 월페이퍼 없음";
-        await SaveSettingsAsync();
+        try
+        {
+            _settings.SelectedMonitorId = display.Id;
+            var profile = _settings.GetOrCreateDisplayProfile(display.Id);
+            _settings.ActiveWallpaper = profile.Wallpaper?.Copy();
+            _settings.Playback = profile.Playback.Copy();
+            ApplyPlaybackProfileToControls(profile.Playback);
+            UpdateSelectedDisplayStatus();
+            DisplayList.ScrollIntoView(display);
+            await SaveSettingsAsync();
+        }
+        catch (Exception exception)
+        {
+            await ReportErrorAsync("디스플레이 선택을 저장하지 못했습니다.", exception);
+        }
+    }
+
+    private void UpdateSelectedDisplayStatus()
+    {
+        if (DisplayList.SelectedItem is not DisplayInfo display)
+        {
+            NowPlayingText.Text = "연결된 디스플레이 없음";
+            if (!IsWallpaperApplying) HomeStatusText.Text = string.Empty;
+            return;
+        }
+
+        var wallpaper = _settings.FindDisplayProfile(display.Id)?.Wallpaper;
+        NowPlayingText.Text = wallpaper?.Name ?? "선택 화면에 적용된 월페이퍼 없음";
+        if (!IsWallpaperApplying)
+        {
+            HomeStatusText.Text = string.Empty;
+        }
+    }
+
+    private void DisplayList_PreviewMouseWheel(object sender, MouseWheelEventArgs args)
+    {
+        var scroll = FindVisualChild<ScrollViewer>(DisplayList);
+        if (scroll is null || scroll.ScrollableWidth <= 0) return;
+        scroll.ScrollToHorizontalOffset(scroll.HorizontalOffset - args.Delta);
+        args.Handled = true;
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T result) return result;
+            if (FindVisualChild<T>(child) is { } nested) return nested;
+        }
+        return null;
     }
 
     private async void FitComboBox_SelectionChanged(
@@ -1325,6 +1498,7 @@ public partial class MainWindow : Window
         {
             return;
         }
+        UpdateClockPreviewTimer();
 
         if (IsVisible)
         {
@@ -2013,34 +2187,18 @@ public partial class MainWindow : Window
         object sender,
         RoutedEventArgs eventArgs)
     {
-        if (!_initialized)
+        await CommitWidgetControlChangeAsync(() =>
         {
-            return;
-        }
-
-        _settings.Widgets.IsEnabled =
-            WidgetsEnabledCheckBox.IsChecked == true;
-        _settings.Widgets.ShowClock =
-            ClockWidgetCheckBox.IsChecked == true;
-        _settings.Widgets.ShowSystemInfo =
-            SystemWidgetCheckBox.IsChecked == true;
-        _settings.Widgets.ShowQuickSlots =
-            false;
-        _settings.Widgets.ShowCodexCompanion =
-            CodexCompanionWidgetCheckBox.IsChecked == true;
-        await SaveAndRefreshWidgetsAsync();
-    }
-
-    private async void WidgetPlacement_Changed(
-        object sender,
-        SelectionChangedEventArgs eventArgs)
-    {
-        if (!_initialized)
-        {
-            return;
-        }
-
-        await SaveAndRefreshWidgetsAsync();
+            _settings.Widgets.IsEnabled =
+                WidgetsEnabledCheckBox.IsChecked == true;
+            _settings.Widgets.ShowClock =
+                ClockWidgetCheckBox.IsChecked == true;
+            _settings.Widgets.ShowSystemInfo =
+                SystemWidgetCheckBox.IsChecked == true;
+            _settings.Widgets.ShowQuickSlots = false;
+            _settings.Widgets.ShowCodexCompanion =
+                CodexCompanionWidgetCheckBox.IsChecked == true;
+        });
     }
 
     private async void GridSettings_Changed(
@@ -2062,17 +2220,20 @@ public partial class MainWindow : Window
 
     private async Task SaveAndRefreshWidgetsAsync()
     {
-        if (ClockSideComboBox.SelectedItem is
-            SelectionOption<WidgetSide> clockSide)
+        if (_runtimeClosing) return;
+        var entered = false;
+        try
         {
-            _settings.Widgets.ClockSide = clockSide.Value;
+            await _widgetSettingsGate.WaitAsync(_libraryLifetime.Token);
+            entered = true;
+            await SaveAndRefreshWidgetsCoreAsync();
         }
-        if (SystemSideComboBox.SelectedItem is
-            SelectionOption<WidgetSide> systemSide)
-        {
-            _settings.Widgets.SystemInfoSide = systemSide.Value;
-        }
-        _settings.Widgets.CodexCompanionSide = WidgetSide.Left;
+        catch (OperationCanceledException) when (_runtimeClosing) { }
+        finally { if (entered) _widgetSettingsGate.Release(); }
+    }
+
+    private async Task SaveAndRefreshWidgetsCoreAsync()
+    {
         _settings.Widgets.SnapQuickSlotsToGrid =
             SnapQuickSlotsCheckBox.IsChecked == true;
         if (QuickSlotGridSizeComboBox.SelectedItem is int gridSize)
@@ -2312,11 +2473,14 @@ public partial class MainWindow : Window
             {
                 _settings.SelectedMonitorId = selected.Id;
                 var profile = _settings.GetOrCreateDisplayProfile(selected.Id);
+                _settings.ActiveWallpaper = profile.Wallpaper?.Copy();
                 _settings.Playback = profile.Playback.Copy();
                 ApplyPlaybackProfileToControls(profile.Playback);
                 NowPlayingText.Text = profile.Wallpaper?.Name ??
                     "선택 화면에 적용된 월페이퍼 없음";
             }
+            if (_initialized) UpdateSelectedDisplayStatus();
+            if (_initialized) RefreshWidgetPlacementControls();
         }
         finally
         {
