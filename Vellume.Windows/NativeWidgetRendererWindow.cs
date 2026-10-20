@@ -1316,7 +1316,10 @@ internal sealed partial class NativeWidgetRendererWindow
 
     private IEnumerable<BoundedDesktopPanelHost> EnumeratePanelHosts()
         => _widgetHosts.Values.Select(state => state.Host)
-            .Concat(_stickerHosts.Values.Select(state => state.Host));
+            // Each successive HWND is sent to the bottom. Follow the persisted
+            // front-to-back list explicitly rather than dictionary enumeration.
+            .Concat(_settings.Stickers.Where(item => _stickerHosts.ContainsKey(item.Id))
+                .Select(item => _stickerHosts[item.Id].Host));
 
     private void ClockTimerOnTick(
         object? sender,

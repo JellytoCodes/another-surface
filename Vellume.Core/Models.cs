@@ -470,6 +470,7 @@ public sealed class WidgetSettings
     public ClockStyle ClockStyle { get; set; } = ClockStyle.DigitalClean;
     public string ClockColor { get; set; } = "#FFFFFF";
     public SystemInfoAppearance SystemInfoAppearance { get; set; } = new();
+    // Front to back: the first sticker has the highest layer priority.
     public List<StickerItem> Stickers { get; set; } = [];
     public WidgetPlacement ClockPlacement
     {

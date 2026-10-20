@@ -12,7 +12,7 @@ namespace Vellume.App;
 public partial class MainWindow
 {
     private sealed record StickerChoice(string FileName, string Name, BitmapImage Preview);
-    private sealed record StickerRow(string Id, string Name);
+    private sealed record StickerRow(string Id, string Name, bool CanMoveUp, bool CanMoveDown);
     private readonly List<StickerChoice> _stickerChoices = [];
     private bool _updatingStickerControls;
 
@@ -45,8 +45,8 @@ public partial class MainWindow
         {
             var selectedId = SelectedSticker?.Id;
             var rows = _settings.Widgets.Stickers.Select((item, index) => new StickerRow(item.Id,
-                $"{index + 1}. {StickerCatalog.Find(item.AssetName)?.Name}" +
-                (item.Placement.IsLocked ? " · Lock" : " · 편집 중"))).ToList();
+                $"{index + 1}. {StickerCatalog.Find(item.AssetName)?.Name}",
+                index > 0, index < _settings.Widgets.Stickers.Count - 1)).ToList();
             StickerInstanceList.ItemsSource = rows;
             StickerInstanceList.SelectedItem = rows.FirstOrDefault(row => row.Id == selectedId) ?? rows.LastOrDefault();
             StickerEmptyHint.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -149,6 +149,26 @@ public partial class MainWindow
         if (SelectedSticker is not { } sticker) return;
         var id = sticker.Id;
         await CommitWidgetControlChangeAsync(() => _settings.Widgets.Stickers.RemoveAll(item => item.Id == id));
+    }
+
+    private async void MoveStickerPriority_Click(object sender, RoutedEventArgs args)
+    {
+        if (_updatingStickerControls || sender is not FrameworkElement { DataContext: StickerRow row, Tag: string direction }) return;
+        var offset = direction == "Up" ? -1 : 1;
+        await CommitWidgetControlChangeAsync(() =>
+        {
+            var stickers = _settings.Widgets.Stickers;
+            var index = stickers.FindIndex(item => item.Id == row.Id);
+            var destination = index + offset;
+            if (index < 0 || destination < 0 || destination >= stickers.Count) return;
+            (stickers[index], stickers[destination]) = (stickers[destination], stickers[index]);
+        });
+        if (StickerInstanceList.ItemsSource is IEnumerable<StickerRow> rows &&
+            rows.FirstOrDefault(item => item.Id == row.Id) is { } moved)
+        {
+            StickerInstanceList.SelectedItem = moved;
+            StickerInstanceList.ScrollIntoView(moved);
+        }
     }
 
     private void WallpaperController_StickerChanged(object? sender, StickerChangedEventArgs args)

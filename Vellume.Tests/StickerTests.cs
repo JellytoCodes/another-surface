@@ -37,6 +37,12 @@ public sealed class StickerTests
             Assert.False(restored[1].Placement.IsLocked);
             Assert.False(restored[1].IsVisible);
 
+            await store.SaveAsync(new AppSettings { Widgets = new WidgetSettings { Stickers = [second, first] } });
+            var reordered = (await store.LoadAsync()).Widgets.Stickers;
+            Assert.Equal(new[] { second.Id, first.Id }, reordered.Select(item => item.Id));
+            Assert.False(reordered[0].IsVisible);
+            Assert.True(reordered[1].Placement.IsLocked);
+
             await File.WriteAllTextAsync(Path.Combine(folder, "settings.json"), "{\"Widgets\":{\"Stickers\":null}}");
             Assert.Empty((await store.LoadAsync()).Widgets.Stickers);
             await File.WriteAllTextAsync(Path.Combine(folder, "settings.json"), "{\"Widgets\":{\"ShowClock\":false}}");
@@ -135,6 +141,37 @@ public sealed class StickerTests
             settings.Stickers.Clear();
             Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
             Assert.Empty(renderer.PanelHandles);
+        }));
+
+    [Fact]
+    [Trait("Category", "LocalIntegration")]
+    public void PriorityOrder_UpdatesActualWindowStackForLockedStickers()
+        => RunOnSta(() => WithRenderer((renderer, display) =>
+        {
+            var front = new StickerItem { AssetName = StickerCatalog.All[0].FileName, Size = 160,
+                Placement = WidgetPlacement.FromAnchor(WidgetAnchor.Center, true) };
+            var back = new StickerItem { AssetName = StickerCatalog.All[1].FileName, Size = 240,
+                Placement = WidgetPlacement.FromAnchor(WidgetAnchor.Center, true) };
+            var settings = EmptyWidgets();
+            settings.Stickers = [front, back];
+            Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
+            var handles = renderer.PanelHandles.ToArray();
+            Assert.Equal(2, handles.Length);
+            Assert.Equal(handles[1], NativeMethods.GetWindow(handles[0], NativeMethods.GwHwndNext));
+            Assert.True(NativeMethods.GetWindowRect(handles[0], out var firstBounds));
+            Assert.Equal(162, firstBounds.Right - firstBounds.Left);
+            Assert.Empty(renderer.StickerEditingHandles);
+
+            settings.Stickers = [back, front];
+            Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
+            Assert.All(handles, handle => Assert.False(NativeMethods.IsWindow(handle)));
+            var reordered = renderer.PanelHandles.ToArray();
+            Assert.Equal(2, reordered.Length);
+            Assert.Equal(reordered[1], NativeMethods.GetWindow(reordered[0], NativeMethods.GwHwndNext));
+            Assert.True(NativeMethods.GetWindowRect(reordered[0], out var reorderedBounds));
+            Assert.Equal(242, reorderedBounds.Right - reorderedBounds.Left);
+            Assert.True(renderer.AllPanelsPresented);
+            Assert.Empty(renderer.StickerEditingHandles);
         }));
 
     private static WidgetSettings EmptyWidgets() => new()
