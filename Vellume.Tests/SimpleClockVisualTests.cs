@@ -104,6 +104,42 @@ public sealed class SimpleClockVisualTests
         });
     }
 
+    [Theory]
+    [InlineData(ClockStyle.AnalogMinimal)]
+    [InlineData(ClockStyle.AnalogNumerals)]
+    [InlineData(ClockStyle.DigitalClean)]
+    [InlineData(ClockStyle.DigitalStacked)]
+    [InlineData(ClockStyle.DigitalMono)]
+    public void CustomColor_ColorsEveryElement_AndUpdatesExistingPreview(ClockStyle style)
+    {
+        RunOnStaThread(() =>
+        {
+            var preview = SimpleClockVisual.CreatePreview(style, color: "#E26578");
+            var clock = Assert.IsType<SimpleClockVisual>(preview.Child);
+            var brushes = clock.Children.OfType<TextBlock>().Select(text => text.Foreground)
+                .Concat(clock.Children.OfType<System.Windows.Shapes.Shape>()
+                    .SelectMany(shape => new[] { shape.Fill, shape.Stroke }).OfType<Brush>())
+                .Cast<SolidColorBrush>().ToArray();
+            Assert.NotEmpty(brushes);
+            var alphas = brushes.Select(brush => brush.Color.A).ToArray();
+            Assert.All(brushes, brush =>
+                Assert.Equal(Color.FromArgb(brush.Color.A, 0xE2, 0x65, 0x78), brush.Color));
+            clock.SetColor("#2389ED");
+            Assert.Equal(alphas, brushes.Select(brush => brush.Color.A));
+            Assert.All(brushes, brush =>
+                Assert.Equal(Color.FromArgb(brush.Color.A, 0x23, 0x89, 0xED), brush.Color));
+
+            clock.Measure(new System.Windows.Size(320, 200));
+            clock.Arrange(new Rect(0, 0, 320, 200));
+            var bitmap = new RenderTargetBitmap(320, 200, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(clock);
+            var pixels = new byte[320 * 200 * 4];
+            bitmap.CopyPixels(pixels, 320 * 4, 0);
+            Assert.True(Enumerable.Range(0, 320 * 200)
+                .Count(index => pixels[index * 4 + 3] > 64 && pixels[index * 4] > pixels[index * 4 + 2] * 2) > 250);
+        });
+    }
+
     private static void RunOnStaThread(Action action)
     {
         Exception? failure = null;

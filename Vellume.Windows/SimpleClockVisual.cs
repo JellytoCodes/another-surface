@@ -17,9 +17,9 @@ public sealed class SimpleClockVisual : Canvas
     public const double NaturalWidth = 320;
     public const double NaturalHeight = 200;
 
-    private static readonly SolidColorBrush White = CreateBrush(255, 255, 255, 255);
-    private static readonly SolidColorBrush SoftWhite = CreateBrush(190, 255, 255, 255);
-    private static readonly SolidColorBrush FaintWhite = CreateBrush(82, 255, 255, 255);
+    private readonly SolidColorBrush _foreground = new();
+    private readonly SolidColorBrush _secondaryForeground = new();
+    private readonly SolidColorBrush _faintForeground = new();
     private readonly TextBlock? _primary;
     private readonly TextBlock? _secondary;
     private readonly TextBlock? _date;
@@ -28,8 +28,9 @@ public sealed class SimpleClockVisual : Canvas
     private readonly RotateTransform? _secondRotation;
     private DateTime? _displayedTime;
 
-    public SimpleClockVisual(ClockStyle style)
+    public SimpleClockVisual(ClockStyle style, string? color = null)
     {
+        SetColor(color);
         SelectedStyle = Enum.IsDefined(style) ? style : ClockStyle.DigitalClean;
         Width = NaturalWidth;
         Height = NaturalHeight;
@@ -49,27 +50,27 @@ public sealed class SimpleClockVisual : Canvas
             case ClockStyle.AnalogMinimal:
             case ClockStyle.AnalogNumerals:
                 CreateFace(SelectedStyle == ClockStyle.AnalogNumerals);
-                _hourRotation = AddHand(47, 4, White);
-                _minuteRotation = AddHand(66, 2.5, White);
-                _secondRotation = AddHand(71, 1, SoftWhite);
-                var center = new Ellipse { Width = 6, Height = 6, Fill = White };
+                _hourRotation = AddHand(47, 4, _foreground);
+                _minuteRotation = AddHand(66, 2.5, _foreground);
+                _secondRotation = AddHand(71, 1, _secondaryForeground);
+                var center = new Ellipse { Width = 6, Height = 6, Fill = _foreground };
                 Place(center, 157, 97);
                 break;
             case ClockStyle.DigitalClean:
                 _primary = AddText(64, FontWeights.Light, 26, 57, 220, 82);
                 _primary.TextAlignment = TextAlignment.Right;
                 _secondary = AddText(34, FontWeights.Light, 244, 86, 68, 48);
-                _date = AddText(12, FontWeights.Normal, 20, 139, 280, 24, SoftWhite);
+                _date = AddText(12, FontWeights.Normal, 20, 139, 280, 24, _secondaryForeground);
                 break;
             case ClockStyle.DigitalStacked:
                 _primary = AddText(88, FontWeights.Bold, 70, -11, 180, 110);
                 _secondary = AddText(88, FontWeights.Bold, 70, 72, 180, 110);
-                _date = AddText(10, FontWeights.Normal, 20, 183, 280, 17, SoftWhite);
+                _date = AddText(10, FontWeights.Normal, 20, 183, 280, 17, _secondaryForeground);
                 break;
             case ClockStyle.DigitalMono:
                 _primary = AddText(69, FontWeights.Normal, 5, 55, 310, 93);
                 _primary.FontFamily = new FontFamily("Consolas");
-                _date = AddText(11, FontWeights.Normal, 20, 139, 280, 22, SoftWhite);
+                _date = AddText(11, FontWeights.Normal, 20, 139, 280, 22, _secondaryForeground);
                 break;
         }
 
@@ -119,9 +120,10 @@ public sealed class SimpleClockVisual : Canvas
         ClockStyle style,
         double width = 240,
         double height = 150,
-        DateTime? now = null)
+        DateTime? now = null,
+        string? color = null)
     {
-        var clock = new SimpleClockVisual(style);
+        var clock = new SimpleClockVisual(style, color);
         clock.Update(now ?? DateTime.Now);
         return new Viewbox
         {
@@ -139,10 +141,10 @@ public sealed class SimpleClockVisual : Canvas
         const double centerY = 100;
         if (numerals)
         {
-            AddText(43, FontWeights.Bold, 126, 8, 68, 56, FaintWhite).Text = "12";
-            AddText(43, FontWeights.Bold, 222, 69, 45, 58, FaintWhite).Text = "3";
-            AddText(43, FontWeights.Bold, 137, 130, 46, 58, FaintWhite).Text = "6";
-            AddText(43, FontWeights.Bold, 52, 69, 45, 58, FaintWhite).Text = "9";
+            AddText(43, FontWeights.Bold, 126, 8, 68, 56, _faintForeground).Text = "12";
+            AddText(43, FontWeights.Bold, 222, 69, 45, 58, _faintForeground).Text = "3";
+            AddText(43, FontWeights.Bold, 137, 130, 46, 58, _faintForeground).Text = "6";
+            AddText(43, FontWeights.Bold, 52, 69, 45, 58, _faintForeground).Text = "9";
             return;
         }
 
@@ -157,7 +159,7 @@ public sealed class SimpleClockVisual : Canvas
                 Y1 = centerY - Math.Cos(angle) * innerRadius,
                 X2 = centerX + Math.Sin(angle) * 87,
                 Y2 = centerY - Math.Cos(angle) * 87,
-                Stroke = major ? White : SoftWhite,
+                Stroke = major ? _foreground : _secondaryForeground,
                 StrokeThickness = major ? 1.6 : 1,
                 StrokeStartLineCap = PenLineCap.Round,
                 StrokeEndLineCap = PenLineCap.Round
@@ -199,7 +201,7 @@ public sealed class SimpleClockVisual : Canvas
             FontSize = size,
             FontWeight = weight,
             FontFamily = new FontFamily("Segoe UI"),
-            Foreground = foreground ?? White,
+            Foreground = foreground ?? _foreground,
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.NoWrap
         };
@@ -216,10 +218,14 @@ public sealed class SimpleClockVisual : Canvas
         Children.Add(element);
     }
 
-    private static SolidColorBrush CreateBrush(byte alpha, byte red, byte green, byte blue)
+    public void SetColor(string? value)
     {
-        var brush = new SolidColorBrush(Color.FromArgb(alpha, red, green, blue));
-        brush.Freeze();
-        return brush;
+        var hex = WidgetSettings.NormalizeClockColor(value);
+        var red = Convert.ToByte(hex.Substring(1, 2), 16);
+        var green = Convert.ToByte(hex.Substring(3, 2), 16);
+        var blue = Convert.ToByte(hex.Substring(5, 2), 16);
+        _foreground.Color = Color.FromRgb(red, green, blue);
+        _secondaryForeground.Color = Color.FromArgb(190, red, green, blue);
+        _faintForeground.Color = Color.FromArgb(82, red, green, blue);
     }
 }

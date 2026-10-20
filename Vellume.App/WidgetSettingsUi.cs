@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using System.Windows.Media;
 using Vellume.Core;
 using Vellume.Windows;
 using CheckBox = System.Windows.Controls.CheckBox;
@@ -84,6 +85,12 @@ public partial class MainWindow
         _updatingWidgetControls = true;
         try
         {
+            var clockColor = WidgetSettings.NormalizeClockColor(_settings.Widgets.ClockColor);
+            ClockColorTextBox.Text = clockColor;
+            ClockColorSwatch.Background = new SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(clockColor));
+            foreach (var choice in _clockStyleChoices)
+                if (choice.Preview is Viewbox { Child: SimpleClockVisual clock }) clock.SetColor(clockColor);
             ClockStyleList.SelectedItem = _clockStyleChoices.FirstOrDefault(
                 choice => choice.Value == _settings.Widgets.ClockStyle);
             foreach (var kind in Enum.GetValues<WidgetKind>())
@@ -158,6 +165,47 @@ public partial class MainWindow
     {
         if (ClockStyleList.SelectedItem is ClockStyleChoice choice)
             await CommitWidgetControlChangeAsync(() => _settings.Widgets.ClockStyle = choice.Value);
+    }
+
+    private async void ApplyClockColor_Click(object sender, RoutedEventArgs args)
+    {
+        var hex = ClockColorTextBox.Text.Trim();
+        if (hex.StartsWith('#')) hex = hex[1..];
+        if (hex.Length != 6 || !hex.All(Uri.IsHexDigit))
+        {
+            ClockColorStatusText.Text = "#RRGGBB 형식으로 입력하세요. 예: #89E0D5";
+            return;
+        }
+        await ApplyClockColorAsync("#" + hex.ToUpperInvariant());
+    }
+
+    private async void ResetClockColor_Click(object sender, RoutedEventArgs args)
+        => await ApplyClockColorAsync("#FFFFFF");
+
+    private async void ChooseClockColor_Click(object sender, RoutedEventArgs args)
+    {
+        if (!_initialized || _runtimeClosing) return;
+        var color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
+            WidgetSettings.NormalizeClockColor(_settings.Widgets.ClockColor));
+        using var picker = new System.Windows.Forms.ColorDialog
+        {
+            FullOpen = true,
+            Color = System.Drawing.Color.FromArgb(color.R, color.G, color.B)
+        };
+        var owner = new System.Windows.Forms.NativeWindow();
+        owner.AssignHandle(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+        try
+        {
+            if (picker.ShowDialog(owner) != System.Windows.Forms.DialogResult.OK) return;
+        }
+        finally { owner.ReleaseHandle(); }
+        await ApplyClockColorAsync($"#{picker.Color.R:X2}{picker.Color.G:X2}{picker.Color.B:X2}");
+    }
+
+    private async Task ApplyClockColorAsync(string color)
+    {
+        ClockColorStatusText.Text = string.Empty;
+        await CommitWidgetControlChangeAsync(() => _settings.Widgets.ClockColor = color);
     }
 
     private static bool TryGetWidgetKind(FrameworkElement element, out WidgetKind kind)

@@ -468,6 +468,7 @@ public sealed class WidgetSettings
     // placements take precedence, and absent companion placement starts left.
     public WidgetSide CodexCompanionSide { get; set; } = WidgetSide.Left;
     public ClockStyle ClockStyle { get; set; } = ClockStyle.DigitalClean;
+    public string ClockColor { get; set; } = "#FFFFFF";
     public List<StickerItem> Stickers { get; set; } = [];
     public WidgetPlacement ClockPlacement
     {
@@ -593,6 +594,7 @@ public sealed class WidgetSettings
             ClockStyle = Enum.IsDefined(ClockStyle)
                 ? ClockStyle
                 : ClockStyle.DigitalClean,
+            ClockColor = NormalizeClockColor(ClockColor),
             ClockPlacement = ClockPlacement.Copy(WidgetAnchor.TopRight),
             SystemInfoPlacement = SystemInfoPlacement.Copy(WidgetAnchor.CenterRight),
             CodexPlacement = CodexPlacement.Copy(WidgetAnchor.TopLeft),
@@ -606,6 +608,15 @@ public sealed class WidgetSettings
             SystemShortcuts = systemShortcuts,
             QuickSlotGroups = groups
         };
+    }
+
+    public static string NormalizeClockColor(string? value)
+    {
+        var hex = value?.Trim();
+        if (hex?.StartsWith('#') == true) hex = hex[1..];
+        return hex is { Length: 6 } && hex.All(Uri.IsHexDigit)
+            ? "#" + hex.ToUpperInvariant()
+            : "#FFFFFF";
     }
 
     public WidgetPlacement GetPlacement(WidgetKind kind)

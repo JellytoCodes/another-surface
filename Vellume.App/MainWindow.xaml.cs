@@ -749,6 +749,7 @@ public partial class MainWindow : Window
     {
         WallpaperPage.Visibility = Visibility.Collapsed;
         WidgetsPage.Visibility = Visibility.Collapsed;
+        DockPage.Visibility = Visibility.Collapsed;
         SettingsPage.Visibility = Visibility.Collapsed;
         page.Visibility = Visibility.Visible;
         UpdateClockPreviewTimer();
@@ -759,6 +760,9 @@ public partial class MainWindow : Window
 
     private void WidgetsNavigation_Click(object sender, RoutedEventArgs eventArgs)
         => ShowPage(WidgetsPage);
+
+    private void DockNavigation_Click(object sender, RoutedEventArgs eventArgs)
+        => ShowPage(DockPage);
 
     private void SettingsNavigation_Click(object sender, RoutedEventArgs eventArgs)
         => ShowPage(SettingsPage);

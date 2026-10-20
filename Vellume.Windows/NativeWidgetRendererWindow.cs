@@ -311,6 +311,7 @@ internal sealed partial class NativeWidgetRendererWindow
            current.ClockSide == next.ClockSide &&
            current.SystemInfoSide == next.SystemInfoSide &&
            current.ClockStyle == next.ClockStyle &&
+           current.ClockColor == next.ClockColor &&
            HasSamePlacement(current.ClockPlacement, next.ClockPlacement) &&
            HasSamePlacement(current.SystemInfoPlacement, next.SystemInfoPlacement) &&
            HasSamePlacement(current.CodexPlacement, next.CodexPlacement) &&
@@ -689,7 +690,7 @@ internal sealed partial class NativeWidgetRendererWindow
 
     internal FrameworkElement CreateClock(WidgetSide side)
     {
-        _simpleClock = new SimpleClockVisual(_settings.ClockStyle);
+        _simpleClock = new SimpleClockVisual(_settings.ClockStyle, _settings.ClockColor);
         _simpleClock.Update(DateTime.Now);
         return _simpleClock;
     }

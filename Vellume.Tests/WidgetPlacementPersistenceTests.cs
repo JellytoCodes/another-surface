@@ -20,6 +20,7 @@ public sealed class WidgetPlacementPersistenceTests
                 Widgets = new WidgetSettings
                 {
                     ClockStyle = style,
+                    ClockColor = "#89E0D5",
                     ClockPlacement = new WidgetPlacement
                     {
                         Anchor = WidgetAnchor.Custom,
@@ -39,6 +40,7 @@ public sealed class WidgetPlacementPersistenceTests
 
             Assert.Equal(AppSettings.CurrentSchemaVersion, restored.SchemaVersion);
             Assert.Equal(style, restored.Widgets.ClockStyle);
+            Assert.Equal("#89E0D5", restored.Widgets.ClockColor);
             Assert.Equal(WidgetAnchor.Custom, restored.Widgets.ClockPlacement.Anchor);
             Assert.Equal(0.31, restored.Widgets.ClockPlacement.X);
             Assert.Equal(0.72, restored.Widgets.ClockPlacement.Y);
@@ -173,6 +175,21 @@ public sealed class WidgetPlacementPersistenceTests
             Assert.Equal(0.5, restored.Widgets.ClockPlacement.X);
             Assert.Equal(0.5, restored.Widgets.ClockPlacement.Y);
         });
+    }
+
+    [Theory]
+    [InlineData("#123abc", "#123ABC")]
+    [InlineData(" 89e0d5 ", "#89E0D5")]
+    [InlineData(null, "#FFFFFF")]
+    [InlineData("", "#FFFFFF")]
+    [InlineData("#FF223344", "#FFFFFF")]
+    [InlineData("##123456", "#FFFFFF")]
+    [InlineData("#zzzzzz", "#FFFFFF")]
+    public void Copy_NormalizesClockColor_AndDefaultsInvalidData(string? input, string expected)
+    {
+        var settings = new WidgetSettings { ClockColor = input! };
+        Assert.Equal(expected, settings.Copy().ClockColor);
+        Assert.Equal("#FFFFFF", new WidgetSettings().ClockColor);
     }
 
     private static async Task WithStoreAsync(

@@ -48,6 +48,9 @@
                                 Content="⌁   위젯"
                             Click="WidgetsNavigation_Click"/>
                     <Button Style="{StaticResource NavigationButton}"
+                                Content="▤   Dock"
+                            Click="DockNavigation_Click"/>
+                    <Button Style="{StaticResource NavigationButton}"
                                 Content="⚙   설정"
                             Click="SettingsNavigation_Click"/>
                 </StackPanel>
@@ -545,6 +548,17 @@
                         <Border Margin="0,16,0,0" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18">
                             <StackPanel>
                                 <TextBlock Text="시계 디자인" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,14"/>
+                                <WrapPanel Margin="0,0,0,12">
+                                    <TextBlock Text="시계 색상" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                    <Border x:Name="ClockColorSwatch" Width="26" Height="26" CornerRadius="6"
+                                            BorderBrush="#667080" BorderThickness="1" Margin="0,0,8,0"/>
+                                    <TextBox x:Name="ClockColorTextBox" Width="100" MaxLength="7" Text="#FFFFFF"
+                                             VerticalContentAlignment="Center" ToolTip="#RRGGBB 색상 코드"/>
+                                    <Button Content="적용" Click="ApplyClockColor_Click" Padding="12,5" Margin="8,0,0,0"/>
+                                    <Button Content="색상 선택…" Click="ChooseClockColor_Click" Padding="12,5" Margin="8,0,0,0"/>
+                                    <Button Content="기본 색상" Click="ResetClockColor_Click" Padding="12,5" Margin="8,0,0,0"/>
+                                </WrapPanel>
+                                <TextBlock x:Name="ClockColorStatusText" Foreground="#F2C97D" FontSize="11" TextWrapping="Wrap"/>
                                 <ListBox x:Name="ClockStyleList" SelectionMode="Single"
                                          SelectionChanged="ClockStyleList_SelectionChanged"
                                          ScrollViewer.VerticalScrollBarVisibility="Disabled"
@@ -610,7 +624,21 @@
                             </Grid>
                         </Border>
 
-                        <Border Margin="0,16,0,0"
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <Grid x:Name="DockPage" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="22"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="Dock" FontSize="30" FontWeight="Bold"/>
+                <ScrollViewer x:Name="DockScrollViewer" Grid.Row="2"
+                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <Border Margin="0,0,0,0"
                                 Background="{StaticResource SurfaceBrush}"
                                 CornerRadius="12"
                                 Padding="22">
