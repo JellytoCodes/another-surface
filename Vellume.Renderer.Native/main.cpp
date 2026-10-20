@@ -126,8 +126,43 @@ bool ReadExact(HANDLE stream, void *destination, std::uint32_t length)
     std::uint32_t offset = 0;
     while (offset < length)
     {
+        // This thread owns an HWND parented to Explorer. Blocking on the
+        // synchronous stdin pipe also blocks display/DWM messages and can
+        // stall the desktop's shared input queue during fullscreen changes.
+        MSG message{};
+        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE))
+        {
+            if (message.message == WM_QUIT)
+            {
+                return false;
+            }
+            TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
+
+        DWORD available = 0;
+        if (!PeekNamedPipe(stream, nullptr, 0, nullptr, &available, nullptr))
+        {
+            const auto error = GetLastError();
+            if (error == ERROR_BROKEN_PIPE || error == ERROR_HANDLE_EOF)
+            {
+                return false;
+            }
+            throw std::runtime_error("Failed to inspect the renderer command stream.");
+        }
+        if (available == 0)
+        {
+            // Anonymous stdin pipes cannot use overlapped reads. Wait for
+            // window messages and check the pipe at most 20 times per second;
+            // never busy-spin or read beyond the bytes already available.
+            if (MsgWaitForMultipleObjectsEx(0, nullptr, 50, QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+            {
+                throw std::runtime_error("Failed to wait for renderer window messages.");
+            }
+            continue;
+        }
         DWORD read = 0;
-        if (!ReadFile(stream, output + offset, length - offset, &read, nullptr))
+        if (!ReadFile(stream, output + offset, std::min<DWORD>(length - offset, available), &read, nullptr))
         {
             const auto error = GetLastError();
             if (error == ERROR_BROKEN_PIPE || error == ERROR_HANDLE_EOF)

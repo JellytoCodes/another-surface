@@ -7,6 +7,45 @@ namespace Vellume.Tests;
 public sealed class NativeWallpaperRendererClientTests
 {
     [Theory]
+    [InlineData(320, 180)]
+    [InlineData(3840, 2160)]
+    [Trait("Category", "LocalIntegration")]
+    public async Task IdleRenderer_DispatchesDisplayMessagesWithoutWaitingForAnotherCommand(int width, int height)
+    {
+        var root = FindRepositoryRoot();
+        var executable = Path.Combine(root, "Vellume.Renderer.Native", "bin", "x64", "Release", "Vellume.Renderer.Native.exe");
+        using var host = new MessageWindowHost();
+        var renderer = new NativeWallpaperRendererClient(executable);
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            var display = new DisplayInfo { Id = "idle-message-test", Name = "Offscreen display", X = -32000, Y = -32000,
+                Width = width, Height = height, IsPrimary = true };
+            await renderer.AttachToAsync(host.Handle, display, false, nint.Zero, nint.Zero, timeout.Token);
+            await renderer.InitializeAndNavigateAsync(new WallpaperItem
+            {
+                Kind = WallpaperKind.Image,
+                SourcePath = Path.Combine(root, "Vellume.App", "Assets", "Brand", "vellume-dock-icon.png")
+            }, new PlaybackOptions(), timeout.Token);
+            await Task.Delay(100, timeout.Token);
+
+            // No pipe traffic is sent while Windows synchronously delivers these
+            // notifications, as happens on exclusive-fullscreen display changes.
+            foreach (var message in new uint[] { 0, 0x007E, 0x031E }) // WM_NULL, WM_DISPLAYCHANGE, WM_DWMCOMPOSITIONCHANGED
+            {
+                var acknowledged = NativeMethods.SendMessageTimeoutW(renderer.Handle, message, new nint(32),
+                    new nint((height << 16) | width), 3, 1000, out _);
+                Assert.True(acknowledged != nint.Zero,
+                    $"Idle native renderer did not dispatch message 0x{message:X} within one second at {width}x{height}.");
+            }
+            await renderer.PauseAsync();
+            await renderer.ResumeAsync();
+            Assert.True(renderer.IsReady);
+        }
+        finally { await renderer.CloseSafelyAsync(); }
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     [Trait("Category", "LocalIntegration")]
@@ -316,6 +355,17 @@ public sealed class NativeWallpaperRendererClientTests
             AssertPhysicalBounds(rendererHandle, resizedDisplay);
             await renderer.ResumeAsync();
             Assert.True(renderer.IsReady);
+            foreach (var (width, height) in new[] { (3840, 2160), (320, 180) })
+            {
+                var transitionDisplay = new DisplayInfo { Id = display.Id, Name = display.Name,
+                    X = display.X, Y = display.Y, Width = width, Height = height, IsPrimary = true };
+                await renderer.AttachToAsync(host.Handle, transitionDisplay, false, nint.Zero, nint.Zero, timeout.Token);
+                Assert.Equal(rendererHandle, renderer.Handle);
+                AssertPhysicalBounds(rendererHandle, transitionDisplay);
+                await Task.Delay(100, timeout.Token);
+                Assert.NotEqual(nint.Zero, NativeMethods.SendMessageTimeoutW(rendererHandle, 0x007E,
+                    new nint(32), new nint((height << 16) | width), 3, 1000, out _));
+            }
         }
         finally
         {
