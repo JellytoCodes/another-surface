@@ -71,8 +71,7 @@ internal sealed partial class NativeWidgetRendererWindow
         ImageSource?>> CompanionImages =
         new(CreateCompanionImages);
     private readonly DispatcherTimer _clockTimer;
-    private readonly Dictionary<string, GaugeVisual> _gauges =
-        new(StringComparer.Ordinal);
+    private SystemInfoVisual? _systemInfoVisual;
     private readonly Dictionary<WidgetKind, WidgetHostState> _widgetHosts = [];
     private readonly IMonitorService _monitorService;
     private IReadOnlyList<DisplayInfo> _availableDisplays = [];
@@ -166,7 +165,7 @@ internal sealed partial class NativeWidgetRendererWindow
         NativeMethods.IsWindow(_compositionParentHandle) &&
         (!_settings.IsEnabled ||
          ((!_settings.ShowClock || IsWidgetReady(WidgetKind.Clock)) &&
-          (!_settings.ShowSystemInfo || IsWidgetReady(WidgetKind.SystemInfo)) &&
+          (!_settings.ShowSystemInfo || !_settings.SystemInfoAppearance.HasVisibleItems || IsWidgetReady(WidgetKind.SystemInfo)) &&
           (!_settings.ShowCodexCompanion || IsWidgetReady(WidgetKind.CodexCompanion))));
 
     private bool IsWidgetReady(WidgetKind kind)
@@ -312,6 +311,7 @@ internal sealed partial class NativeWidgetRendererWindow
            current.SystemInfoSide == next.SystemInfoSide &&
            current.ClockStyle == next.ClockStyle &&
            current.ClockColor == next.ClockColor &&
+           current.SystemInfoAppearance == next.SystemInfoAppearance &&
            HasSamePlacement(current.ClockPlacement, next.ClockPlacement) &&
            HasSamePlacement(current.SystemInfoPlacement, next.SystemInfoPlacement) &&
            HasSamePlacement(current.CodexPlacement, next.CodexPlacement) &&
@@ -428,7 +428,7 @@ internal sealed partial class NativeWidgetRendererWindow
         _codexRenderTarget = null;
         _hostHandle = nint.Zero;
         _compositionParentHandle = nint.Zero;
-        _gauges.Clear();
+        _systemInfoVisual = null;
         return Task.CompletedTask;
     }
 
@@ -506,7 +506,7 @@ internal sealed partial class NativeWidgetRendererWindow
         {
             CreateWidgetHost(WidgetKind.Clock, CreateClock(_settings.ClockSide));
         }
-        if (_settings.ShowSystemInfo)
+        if (_settings.ShowSystemInfo && _settings.SystemInfoAppearance.HasVisibleItems)
         {
             CreateWidgetHost(WidgetKind.SystemInfo, CreateSystemPanel(_settings.SystemInfoSide));
         }
@@ -697,190 +697,8 @@ internal sealed partial class NativeWidgetRendererWindow
 
     internal FrameworkElement CreateSystemPanel(WidgetSide side)
     {
-        var root = new StackPanel
-        {
-            Width = 255
-        };
-        root.Children.Add(CreateGauge(
-            "cpu",
-            ReferenceCyan,
-            "CPU 사용량",
-            "실시간 프로세서",
-            side));
-        root.Children.Add(CreateGauge(
-            "gpu",
-            ReferenceCyan,
-            "GPU 사용량",
-            "GPU 엔진",
-            side));
-        root.Children.Add(CreateGauge(
-            "memory",
-            ReferenceCyan,
-            "메모리",
-            "--",
-            side));
-        root.Children.Add(CreateGauge(
-            "driveC",
-            ReferenceCyan,
-            "C:\\ 드라이브",
-            "--",
-            side));
-        root.Children.Add(CreateGauge(
-            "driveD",
-            ReferenceCyan,
-            "D:\\ 드라이브",
-            "--",
-            side));
-        return root;
-    }
-
-    private FrameworkElement CreateGauge(
-        string key,
-        Color accent,
-        string title,
-        string detail,
-        WidgetSide side)
-    {
-        var left = side == WidgetSide.Left;
-        var canvas = new Canvas
-        {
-            Width = 255,
-            Height = 54,
-            Background = Brushes.Transparent
-        };
-        const double lineWidth = 201;
-        var lineLeft = left ? 54 : 0;
-        var lineOutline = new Border
-        {
-            Width = lineWidth,
-            Height = 3,
-            Background = new SolidColorBrush(
-                MikuPalette.WithAlpha(
-                    Colors.White,
-                    230))
-        };
-        Canvas.SetLeft(lineOutline, lineLeft);
-        Canvas.SetTop(lineOutline, 29);
-        canvas.Children.Add(lineOutline);
-        var line = new Border
-        {
-            Width = lineWidth,
-            Height = 1,
-            Background = new SolidColorBrush(
-                MikuPalette.WithAlpha(
-                    ReferenceNavy,
-                    195))
-        };
-        Canvas.SetLeft(line, lineLeft);
-        Canvas.SetTop(line, 30);
-        canvas.Children.Add(line);
-
-        var ring = new Grid
-        {
-            Width = 54,
-            Height = 54
-        };
-        ring.Children.Add(new Ellipse
-        {
-            Fill = new SolidColorBrush(
-                MikuPalette.WithAlpha(
-                    ReferenceBlue,
-                    48)),
-            Stroke = new SolidColorBrush(ReferenceNavy),
-            StrokeThickness = 2
-        });
-        ring.Children.Add(new Ellipse
-        {
-            Margin = new Thickness(7),
-            Stroke = new SolidColorBrush(
-                MikuPalette.WithAlpha(
-                    ReferenceCyan,
-                    155)),
-            StrokeThickness = 1
-        });
-        var arc = new ShapePath
-        {
-            Stroke = new SolidColorBrush(accent),
-            StrokeThickness = 4,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round
-        };
-        ring.Children.Add(arc);
-        Canvas.SetLeft(ring, left ? 0 : 201);
-        Canvas.SetTop(ring, 0);
-        canvas.Children.Add(ring);
-
-        var value = CreateOutlinedVectorText(
-            18,
-            FontWeights.Bold,
-            ReferenceNavy,
-            0.45);
-        value.Text = "--%";
-        value.Margin = new Thickness(5, 0, 0, 0);
-        var copy = new Grid
-        {
-            Width = 190,
-            Height = 54
-        };
-        var heading = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = left
-                ? HorizontalAlignment.Left
-                : HorizontalAlignment.Right
-        };
-        var titleText = CreateOutlinedVectorText(
-            18,
-            FontWeights.Bold,
-            ReferenceNavy,
-            0.45);
-        titleText.Text = title;
-        if (left)
-        {
-            heading.Children.Add(value);
-            heading.Children.Add(CreateSpacer(5));
-            heading.Children.Add(titleText);
-        }
-        else
-        {
-            heading.Children.Add(titleText);
-            heading.Children.Add(value);
-        }
-        var detailText = CreateOutlinedVectorText(
-            11,
-            FontWeights.Bold,
-            ReferenceNavy,
-            0.35);
-        detailText.Text = detail;
-        detailText.TextAlignment = left
-            ? TextAlignment.Left
-            : TextAlignment.Right;
-        detailText.HorizontalAlignment =
-            HorizontalAlignment.Stretch;
-        detailText.VerticalAlignment =
-            VerticalAlignment.Bottom;
-        detailText.Margin = new Thickness(0, 0, 0, 1);
-        heading.VerticalAlignment =
-            VerticalAlignment.Top;
-        copy.Children.Add(heading);
-        copy.Children.Add(detailText);
-        Canvas.SetLeft(copy, left ? 65 : 0);
-        Canvas.SetTop(copy, 0);
-        canvas.Children.Add(copy);
-
-        var root = new Border
-        {
-            Width = 255,
-            Height = 54,
-            Margin = new Thickness(0, 0, 0, 3),
-            Background = Brushes.Transparent,
-            Child = canvas
-        };
-        _gauges[key] = new GaugeVisual(
-            arc,
-            value,
-            detailText);
-        return root;
+        _systemInfoVisual = new SystemInfoVisual(_settings.SystemInfoAppearance);
+        return _systemInfoVisual;
     }
 
     private FrameworkElement CreateCodexPanel(WidgetSide side)
@@ -1342,57 +1160,9 @@ internal sealed partial class NativeWidgetRendererWindow
 
     private void ApplyLastMetrics()
     {
-        var metrics = _lastMetrics;
-        if (metrics is null)
-        {
-            return;
-        }
-
-        var cpu = Math.Round(metrics.CpuPercent);
-        var gpu = metrics.GpuPercent is null
-            ? 0
-            : Math.Round(metrics.GpuPercent.Value);
-        var memory = Math.Round(metrics.MemoryPercent);
-        var driveC = Math.Round(metrics.DriveC.Percent);
-        var driveD = Math.Round(metrics.DriveD.Percent);
-        var changed = SetGauge(
-            "cpu",
-            cpu,
-            $"{cpu}%",
-            "실시간 프로세서");
-        changed |= SetGauge(
-            "gpu",
-            gpu,
-            metrics.GpuPercent is null
-                ? "N/A"
-                : $"{gpu}%",
-            metrics.GpuPercent is null
-                ? "측정 불가"
-                : "GPU 엔진");
-        changed |= SetGauge(
-            "memory",
-            memory,
-            $"{memory}%",
-            $"{FormatBytes(metrics.MemoryUsedBytes)} / " +
-            $"{FormatBytes(metrics.MemoryTotalBytes)}");
-        changed |= SetGauge(
-            "driveC",
-            driveC,
-            metrics.DriveC.IsAvailable
-                ? $"{driveC}%"
-                : "N/A",
-            FormatDrive(metrics.DriveC));
-        changed |= SetGauge(
-            "driveD",
-            driveD,
-            metrics.DriveD.IsAvailable
-                ? $"{driveD}%"
-                : "N/A",
-            FormatDrive(metrics.DriveD));
-        if (changed)
-        {
-            RenderSystemPanel();
-        }
+        if (_lastMetrics is not { } metrics || _systemInfoVisual is null) return;
+        _systemInfoVisual.Update(metrics);
+        RenderSystemPanel();
     }
 
     private void ApplyLastCodex()
@@ -1459,65 +1229,6 @@ internal sealed partial class NativeWidgetRendererWindow
                 RenderCodexPanel();
             }
         }
-    }
-
-    private bool SetGauge(
-        string key,
-        double percent,
-        string value,
-        string detail)
-    {
-        if (!_gauges.TryGetValue(key, out var gauge))
-        {
-            return false;
-        }
-        if (string.Equals(
-                gauge.Value.Text,
-                value,
-                StringComparison.Ordinal) &&
-            string.Equals(
-                gauge.Detail.Text,
-                detail,
-                StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        gauge.Value.Text = value;
-        gauge.Detail.Text = detail;
-        gauge.Arc.Data = CreateArcGeometry(percent);
-        return true;
-    }
-
-    private static Geometry CreateArcGeometry(double percent)
-    {
-        var normalized = Math.Clamp(percent, 0, 100);
-        if (normalized <= 0)
-        {
-            return Geometry.Empty;
-        }
-
-        const double center = 27;
-        const double radius = 23;
-        var angle = normalized >= 100
-            ? 359.999
-            : normalized * 3.6;
-        var radians = (angle - 90) * Math.PI / 180;
-        var end = new Point(
-            center + radius * Math.Cos(radians),
-            center + radius * Math.Sin(radians));
-        var figure = new PathFigure
-        {
-            StartPoint = new Point(center, center - radius)
-        };
-        figure.Segments.Add(new ArcSegment
-        {
-            Point = end,
-            Size = new Size(radius, radius),
-            IsLargeArc = angle > 180,
-            SweepDirection = SweepDirection.Clockwise
-        });
-        return new PathGeometry([figure]);
     }
 
     private void StartCodexAnimation()
@@ -1648,7 +1359,7 @@ internal sealed partial class NativeWidgetRendererWindow
     private void ResetVisualReferences()
     {
         StopCodexAnimation();
-        _gauges.Clear();
+        _systemInfoVisual = null;
         _simpleClock = null;
         _codexHeadline = null;
         _codexProjects = null;
@@ -1705,12 +1416,6 @@ internal sealed partial class NativeWidgetRendererWindow
         text.OutlineThickness = outlineThickness;
         return text;
     }
-
-    private static FrameworkElement CreateSpacer(double width)
-        => new Border
-        {
-            Width = width
-        };
 
     private static LinearGradientBrush CreateGradient(
         bool leftToRight,
@@ -1901,20 +1606,6 @@ internal sealed partial class NativeWidgetRendererWindow
         }
     }
 
-    private static string FormatBytes(ulong bytes)
-    {
-        const double gibibyte =
-            1024d * 1024d * 1024d;
-        return $"{bytes / gibibyte:0.0} GB";
-    }
-
-    private static string FormatDrive(
-        DriveMetricsSnapshot drive)
-        => drive.IsAvailable
-            ? $"{FormatBytes(drive.UsedBytes)} / " +
-              $"{FormatBytes(drive.TotalBytes)}"
-            : "사용할 수 없음";
-
     private sealed class WidgetHostState(
         WidgetKind kind, BoundedDesktopPanelHost host, DisplayInfo display, int x, int y,
         double naturalWidth, double naturalHeight)
@@ -1934,11 +1625,6 @@ internal sealed partial class NativeWidgetRendererWindow
         FrameworkElement Visual,
         int Width,
         int Height);
-
-    private sealed record GaugeVisual(
-        ShapePath Arc,
-        VectorTextBlock Value,
-        VectorTextBlock Detail);
 
     private sealed record LayeredPanelVisual(
         FrameworkElement Visual,

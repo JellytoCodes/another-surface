@@ -319,15 +319,21 @@ public sealed class NativeDesktopOverlayIntegrationTests
         });
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(0d)]
+    [InlineData(0.75d)]
     [Trait("Category", "LocalIntegration")]
-    public void ReferenceSystemPanel_PreservesTranslucentRingCenter()
+    public void SysDashSystemPanel_PreservesConfiguredBackgroundAndTransparentCorners(double opacity)
     {
         RunOnStaThread(() =>
         {
-            const int width = 255;
-            const int height = 285;
+            const int width = (int)SystemInfoVisual.NaturalWidth;
+            const int height = (int)SystemInfoVisual.DefaultHeight;
             var renderer = new NativeWidgetRendererWindow();
+            Assert.True(renderer.ApplySettingsAsync(new WidgetSettings
+            {
+                SystemInfoAppearance = new SystemInfoAppearance { BackgroundOpacity = opacity }
+            }).IsCompletedSuccessfully);
             var panel = renderer.CreateSystemPanel(WidgetSide.Right);
             renderer.UpdateSystemMetricsAsync(
                 new SystemMetricsSnapshot(
@@ -381,16 +387,12 @@ public sealed class NativeDesktopOverlayIntegrationTests
                 }
             }
 
-            Assert.InRange(
-                visiblePixels,
-                2_000,
-                width * height / 2);
-            var firstRingCenterAlpha =
-                pixels[((27 * width + 228) * 4) + 3];
-            Assert.InRange(
-                firstRingCenterAlpha,
-                (byte)32,
-                (byte)64);
+            if (opacity == 0)
+                Assert.InRange(visiblePixels, 2_000, width * height / 3);
+            else
+                Assert.InRange(visiblePixels, width * height - 250, width * height - 1);
+            Assert.Equal(0, pixels[3]);
+            Assert.Equal((byte)Math.Round(opacity * 255), pixels[(10 * width + 10) * 4 + 3]);
 
             var previewPath = Environment.GetEnvironmentVariable(
                 "VELLUME_SYSTEM_PREVIEW_PATH");

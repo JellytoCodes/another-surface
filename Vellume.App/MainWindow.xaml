@@ -500,6 +500,64 @@
 
                         <Border Margin="0,16,0,0" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18">
                             <StackPanel>
+                                <TextBlock Text="시스템 정보 · SysDash" FontSize="18" FontWeight="SemiBold"/>
+                                <TextBlock Text="CPU·GPU·RAM은 최근 60회 측정 추이, 디스크는 사용량 막대로 표시합니다."
+                                           Foreground="{StaticResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,16"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="216"/><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <Border Background="#434A5A" CornerRadius="6" Padding="8">
+                                            <Grid>
+                                                <ContentControl x:Name="SystemInfoPreview" HorizontalContentAlignment="Center">
+                                                    <ContentControl.LayoutTransform><ScaleTransform ScaleX="0.63" ScaleY="0.63"/></ContentControl.LayoutTransform>
+                                                </ContentControl>
+                                                <TextBlock x:Name="SystemInfoEmptyPreview" Text="표시할 항목을 선택하세요." Visibility="Collapsed"
+                                                           TextWrapping="Wrap" Margin="8" FontSize="11" Foreground="White"/>
+                                            </Grid>
+                                        </Border>
+                                        <TextBlock Text="미리 보기 · 예시 수치" Foreground="{StaticResource MutedTextBrush}" FontSize="10" HorizontalAlignment="Center" Margin="0,7,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="표시 항목" FontWeight="SemiBold"/>
+                                        <WrapPanel Margin="0,8,0,14">
+                                            <CheckBox x:Name="SystemCpuCheckBox" Content="CPU" Tag="Cpu" Margin="0,0,14,8" Checked="SystemMetric_Changed" Unchecked="SystemMetric_Changed"/>
+                                            <CheckBox x:Name="SystemGpuCheckBox" Content="GPU" Tag="Gpu" Margin="0,0,14,8" Checked="SystemMetric_Changed" Unchecked="SystemMetric_Changed"/>
+                                            <CheckBox x:Name="SystemMemoryCheckBox" Content="RAM" Tag="Memory" Margin="0,0,14,8" Checked="SystemMetric_Changed" Unchecked="SystemMetric_Changed"/>
+                                            <CheckBox x:Name="SystemDriveCCheckBox" Content="C:" Tag="DriveC" Margin="0,0,14,8" Checked="SystemMetric_Changed" Unchecked="SystemMetric_Changed"/>
+                                            <CheckBox x:Name="SystemDriveDCheckBox" Content="D:" Tag="DriveD" Margin="0,0,0,8" Checked="SystemMetric_Changed" Unchecked="SystemMetric_Changed"/>
+                                        </WrapPanel>
+                                        <WrapPanel Margin="0,0,0,8">
+                                            <TextBlock Text="강조색" Width="60" VerticalAlignment="Center"/>
+                                            <Border x:Name="SystemAccentSwatch" Width="24" Height="24" CornerRadius="4" Margin="0,0,8,0" BorderBrush="#667080" BorderThickness="1"/>
+                                            <TextBox x:Name="SystemAccentColorTextBox" Width="90" MaxLength="7" VerticalContentAlignment="Center" ToolTip="#RRGGBB 색상 코드"/>
+                                            <Button Content="선택…" Tag="Accent" Click="ChooseSystemColor_Click" Padding="10,5" Margin="8,0,0,0"/>
+                                        </WrapPanel>
+                                        <WrapPanel Margin="0,0,0,8">
+                                            <TextBlock Text="글자색" Width="60" VerticalAlignment="Center"/>
+                                            <Border x:Name="SystemTextSwatch" Width="24" Height="24" CornerRadius="4" Margin="0,0,8,0" BorderBrush="#667080" BorderThickness="1"/>
+                                            <TextBox x:Name="SystemTextColorTextBox" Width="90" MaxLength="7" VerticalContentAlignment="Center" ToolTip="#RRGGBB 색상 코드"/>
+                                            <Button Content="선택…" Tag="Text" Click="ChooseSystemColor_Click" Padding="10,5" Margin="8,0,0,0"/>
+                                        </WrapPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="60,0,0,8">
+                                            <Button Content="색상 적용" Click="ApplySystemColors_Click" Padding="10,5"/>
+                                            <Button Content="기본값" Click="ResetSystemAppearance_Click" Padding="10,5" Margin="8,0,0,0"/>
+                                        </StackPanel>
+                                        <TextBlock x:Name="SystemColorStatusText" Foreground="#F2C97D" FontSize="11" TextWrapping="Wrap"/>
+                                        <WrapPanel Margin="0,6,0,8">
+                                            <TextBlock Text="크기" Width="110" VerticalAlignment="Center"/>
+                                            <ComboBox x:Name="SystemScaleComboBox" Width="150" SelectionChanged="SystemScale_Changed"/>
+                                        </WrapPanel>
+                                        <WrapPanel>
+                                            <TextBlock Text="배경 불투명도" Width="110" VerticalAlignment="Center"/>
+                                            <ComboBox x:Name="SystemOpacityComboBox" Width="150" SelectionChanged="SystemOpacity_Changed"/>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Margin="0,16,0,0" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18">
+                            <StackPanel>
                                 <TextBlock Text="스티커" FontSize="18" FontWeight="SemiBold"/>
                                 <TextBlock Text="아래 이미지를 눌러 붙이세요. 드래그로 이동하고 ↘ 손잡이로 크기, ↻ 손잡이로 회전을 조절합니다."
                                            TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" Margin="0,6,0,14"/>

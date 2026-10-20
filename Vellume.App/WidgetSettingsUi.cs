@@ -16,6 +16,7 @@ public partial class MainWindow
     private readonly long[] _widgetPlacementRevisions = new long[Enum.GetValues<WidgetKind>().Length];
     private DispatcherTimer? _clockPreviewTimer;
     private bool _updatingWidgetControls;
+    private SystemInfoAppearance? _systemPreviewAppearance;
 
     private sealed record ClockStyleChoice(ClockStyle Value, string Label, FrameworkElement Preview);
 
@@ -93,6 +94,7 @@ public partial class MainWindow
                 if (choice.Preview is Viewbox { Child: SimpleClockVisual clock }) clock.SetColor(clockColor);
             ClockStyleList.SelectedItem = _clockStyleChoices.FirstOrDefault(
                 choice => choice.Value == _settings.Widgets.ClockStyle);
+            RefreshSystemAppearanceControls();
             foreach (var kind in Enum.GetValues<WidgetKind>())
             {
                 var placement = _settings.Widgets.GetPlacement(kind);

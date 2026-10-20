@@ -97,8 +97,8 @@ public sealed class WidgetResolutionScaleTests
                     AssertScaled(bounds[0].Bottom - bounds[0].Top, 200, resolution.Scale, tolerance);
                     AssertScaled(display.X + display.Width - bounds[0].Right, 24, resolution.Scale, tolerance);
                     AssertScaled(bounds[0].Top - display.Y, 24, resolution.Scale, tolerance);
-                    AssertScaled(bounds[1].Right - bounds[1].Left, 255, resolution.Scale, tolerance);
-                    AssertScaled(bounds[1].Bottom - bounds[1].Top, 285, resolution.Scale, tolerance);
+                    AssertScaled(bounds[1].Right - bounds[1].Left, SystemInfoVisual.NaturalWidth, resolution.Scale, tolerance);
+                    AssertScaled(bounds[1].Bottom - bounds[1].Top, SystemInfoVisual.DefaultHeight, resolution.Scale, tolerance);
                     AssertScaled(display.X + display.Width - bounds[1].Right, 24, resolution.Scale, tolerance);
                     Assert.InRange(Math.Abs(bounds[1].Top - display.Y -
                         (display.Height - (bounds[1].Bottom - bounds[1].Top)) / 2d), 0, 1);
@@ -189,8 +189,8 @@ public sealed class WidgetResolutionScaleTests
                         (display.Height - (panel.Bottom - panel.Top)) / 2d), 0, 1);
                     AssertScaled(display.X + display.Width - panel.Right,
                         24, scale, tolerance);
-                    AssertScaled(panel.Right - panel.Left, 255, scale, tolerance);
-                    AssertScaled(panel.Bottom - panel.Top, 285, scale, tolerance);
+                    AssertScaled(panel.Right - panel.Left, SystemInfoVisual.NaturalWidth, scale, tolerance);
+                    AssertScaled(panel.Bottom - panel.Top, SystemInfoVisual.DefaultHeight, scale, tolerance);
                     AssertInsideDisplay(panel, display);
                     AssertTransparentFrames(renderer, [panel]);
                 }
@@ -201,6 +201,38 @@ public sealed class WidgetResolutionScaleTests
             }
         }));
     }
+
+    [Fact]
+    [Trait("Category", "LocalIntegration")]
+    public void SystemWidget_AppearanceChangesResizeSurfaceAndAllHiddenLeavesNoWindow()
+        => RunOnStaThread(() => RunWithOffscreenParent(parent =>
+        {
+            var renderer = new NativeWidgetRendererWindow();
+            renderer.SetWindowVisible(false);
+            try
+            {
+                var settings = new WidgetSettings { ShowClock = false, ShowCodexCompanion = false };
+                Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
+                var display = CreateDisplay(1920, 1080);
+                renderer.AttachTo(parent, display);
+                Assert.True(renderer.InitializeAsync(CancellationToken.None).IsCompletedSuccessfully);
+                Assert.True(renderer.IsReady);
+                settings.SystemInfoAppearance = new SystemInfoAppearance { ShowGpu = false, ShowDriveD = false, Scale = 1.5, BackgroundOpacity = 0 };
+                Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
+                var bounds = ReadPhysicalBounds(Assert.Single(renderer.PanelHandles));
+                Assert.InRange(bounds.Right - bounds.Left, 475, 476);
+                Assert.Equal(360, bounds.Bottom - bounds.Top);
+                AssertInsideDisplay(bounds, display);
+                AssertTransparentFrames(renderer, [bounds]);
+                settings.SystemInfoAppearance.ShowCpu = false;
+                settings.SystemInfoAppearance.ShowMemory = false;
+                settings.SystemInfoAppearance.ShowDriveC = false;
+                Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
+                Assert.True(renderer.IsReady);
+                Assert.Empty(renderer.PanelHandles);
+            }
+            finally { Assert.True(renderer.CloseSafelyAsync().IsCompletedSuccessfully); }
+        }));
 
     private static void AssertScaled(
         int actual,

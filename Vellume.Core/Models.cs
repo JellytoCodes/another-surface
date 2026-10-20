@@ -469,6 +469,7 @@ public sealed class WidgetSettings
     public WidgetSide CodexCompanionSide { get; set; } = WidgetSide.Left;
     public ClockStyle ClockStyle { get; set; } = ClockStyle.DigitalClean;
     public string ClockColor { get; set; } = "#FFFFFF";
+    public SystemInfoAppearance SystemInfoAppearance { get; set; } = new();
     public List<StickerItem> Stickers { get; set; } = [];
     public WidgetPlacement ClockPlacement
     {
@@ -595,6 +596,7 @@ public sealed class WidgetSettings
                 ? ClockStyle
                 : ClockStyle.DigitalClean,
             ClockColor = NormalizeClockColor(ClockColor),
+            SystemInfoAppearance = (SystemInfoAppearance ?? new()).Copy(),
             ClockPlacement = ClockPlacement.Copy(WidgetAnchor.TopRight),
             SystemInfoPlacement = SystemInfoPlacement.Copy(WidgetAnchor.CenterRight),
             CodexPlacement = CodexPlacement.Copy(WidgetAnchor.TopLeft),
