@@ -17,6 +17,11 @@ public interface IWallpaperController : IAsyncDisposable
         add { }
         remove { }
     }
+    event EventHandler<StickerChangedEventArgs>? StickerChanged
+    {
+        add { }
+        remove { }
+    }
 
     Task ApplyAsync(
         WallpaperItem wallpaper,

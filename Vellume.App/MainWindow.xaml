@@ -497,6 +497,53 @@
 
                         <Border Margin="0,16,0,0" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18">
                             <StackPanel>
+                                <TextBlock Text="스티커" FontSize="18" FontWeight="SemiBold"/>
+                                <TextBlock Text="아래 이미지를 눌러 붙이세요. 드래그로 이동하고 ↘ 손잡이로 크기, ↻ 손잡이로 회전을 조절합니다."
+                                           TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" Margin="0,6,0,14"/>
+                                <ScrollViewer MaxHeight="280" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl x:Name="StickerGallery">
+                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Tag="{Binding FileName}" Click="AddSticker_Click" Padding="6" Margin="0,0,8,8" ToolTip="{Binding Name}">
+                                                <StackPanel Width="104">
+                                                    <Image Source="{Binding Preview}" Width="96" Height="88" Stretch="Uniform"/>
+                                                    <TextBlock Text="{Binding Name}" FontSize="10" TextAlignment="Center" Margin="0,5,0,0"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                </ScrollViewer>
+                                <TextBlock x:Name="StickerEmptyHint" Text="아직 붙인 스티커가 없습니다." Foreground="{StaticResource MutedTextBrush}" Margin="0,12,0,0"/>
+                                <ListBox x:Name="StickerInstanceList" DisplayMemberPath="Name" MaxHeight="160" Margin="0,12,0,12"
+                                         SelectionChanged="StickerInstanceList_SelectionChanged"/>
+                                <StackPanel x:Name="StickerDetails">
+                                    <WrapPanel Margin="0,0,0,10">
+                                        <CheckBox x:Name="StickerVisibleCheckBox" Content="표시" Margin="0,0,18,0" VerticalAlignment="Center"
+                                                  Checked="StickerFlags_Changed" Unchecked="StickerFlags_Changed"/>
+                                        <CheckBox x:Name="StickerLockCheckBox" Content="Lock" Margin="0,0,18,0" VerticalAlignment="Center"
+                                                  Checked="StickerFlags_Changed" Unchecked="StickerFlags_Changed"/>
+                                        <ComboBox x:Name="StickerDisplayComboBox" MinWidth="160" SelectionChanged="StickerDisplay_Changed"/>
+                                        <Button Content="선택 스티커 제거" Margin="12,0,0,0" Padding="10,5" Click="RemoveSticker_Click"/>
+                                    </WrapPanel>
+                                    <WrapPanel x:Name="StickerTransformControls">
+                                        <TextBlock Text="크기" VerticalAlignment="Center"/>
+                                        <TextBox x:Name="StickerSizeTextBox" Width="70" Margin="8,0,6,0" ToolTip="48~720 · FHD 기준"/>
+                                        <TextBlock Text="px · 회전" VerticalAlignment="Center"/>
+                                        <TextBox x:Name="StickerRotationTextBox" Width="70" Margin="8,0,6,0"/>
+                                        <TextBlock Text="°" VerticalAlignment="Center"/>
+                                        <Button Content="크기·회전 적용" Margin="12,0,0,0" Padding="10,5" Click="ApplyStickerTransform_Click"/>
+                                    </WrapPanel>
+                                </StackPanel>
+                                <TextBlock x:Name="StickerStatusText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
+                                <TextBlock Text="Lock을 켜면 편집 테두리가 사라집니다. 전체 Lock은 스티커에도 적용됩니다."
+                                           TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Margin="0,16,0,0" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18">
+                            <StackPanel>
                                 <TextBlock Text="시계 디자인" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,14"/>
                                 <ListBox x:Name="ClockStyleList" SelectionMode="Single"
                                          SelectionChanged="ClockStyleList_SelectionChanged"

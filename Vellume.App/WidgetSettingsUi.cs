@@ -54,6 +54,7 @@ public partial class MainWindow
             };
             foreach (var kind in Enum.GetValues<WidgetKind>())
                 GetWidgetControls(kind).Anchor.ItemsSource = anchors;
+            InitializeStickerControls();
             RefreshWidgetPlacementControls();
         }
         finally { _updatingWidgetControls = false; }
@@ -106,6 +107,7 @@ public partial class MainWindow
             }
         }
         finally { _updatingWidgetControls = wasUpdating; }
+        RefreshStickerControls();
     }
 
     private void ClockPreviewTimer_Tick(object? sender, EventArgs args)
@@ -222,6 +224,7 @@ public partial class MainWindow
                 placement.IsLocked = true;
                 _settings.Widgets.SetPlacement(kind, placement);
             }
+            foreach (var sticker in _settings.Widgets.Stickers) sticker.Placement.IsLocked = true;
         });
 
     private void WallpaperController_WidgetPlacementChanged(object? sender, WidgetPlacementChangedEventArgs args)

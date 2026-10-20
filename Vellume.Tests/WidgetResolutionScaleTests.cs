@@ -84,7 +84,7 @@ public sealed class WidgetResolutionScaleTests
                         .GetAwaiter().GetResult();
                     Assert.True(renderer.IsReady);
                     Assert.True(renderer.IsAttachedTo(parent));
-                    Assert.Equal(2, renderer.PanelHandles.Count);
+                    Assert.Equal(3, renderer.PanelHandles.Count);
                     Assert.True(renderer.AllPanelsPresented);
                     Assert.All(renderer.PanelHandles, handle =>
                         Assert.False(NativeMethods.IsWindowVisible(handle)));
@@ -92,26 +92,21 @@ public sealed class WidgetResolutionScaleTests
                     var bounds = renderer.PanelHandles
                         .Select(ReadPhysicalBounds).ToArray();
                     var tolerance = resolution.Scale == 1 ? 0d : 2d;
-                    // Left companion is 520x420 at (28,28). Clock/system
-                    // share a 500x627 right surface with 25px edge spacing.
-                    AssertScaled(bounds[0].Right - bounds[0].Left,
-                        520, resolution.Scale, tolerance);
-                    AssertScaled(bounds[0].Bottom - bounds[0].Top,
-                        420, resolution.Scale, tolerance);
-                    AssertScaled(bounds[0].Left - display.X,
-                        28, resolution.Scale, tolerance);
-                    AssertScaled(bounds[1].Right - bounds[1].Left,
-                        500, resolution.Scale, tolerance);
-                    AssertScaled(bounds[1].Bottom - bounds[1].Top,
-                        627, resolution.Scale, tolerance);
-                    AssertScaled(display.X + display.Width - bounds[1].Right,
-                        25, resolution.Scale, tolerance);
-                    foreach (var panel in bounds)
-                    {
-                        AssertScaled(panel.Top - display.Y,
-                            28, resolution.Scale, tolerance);
-                        AssertInsideDisplay(panel, display);
-                    }
+                    // Each widget now owns an independent bounded surface.
+                    AssertScaled(bounds[0].Right - bounds[0].Left, 320, resolution.Scale, tolerance);
+                    AssertScaled(bounds[0].Bottom - bounds[0].Top, 200, resolution.Scale, tolerance);
+                    AssertScaled(display.X + display.Width - bounds[0].Right, 24, resolution.Scale, tolerance);
+                    AssertScaled(bounds[0].Top - display.Y, 24, resolution.Scale, tolerance);
+                    AssertScaled(bounds[1].Right - bounds[1].Left, 255, resolution.Scale, tolerance);
+                    AssertScaled(bounds[1].Bottom - bounds[1].Top, 285, resolution.Scale, tolerance);
+                    AssertScaled(display.X + display.Width - bounds[1].Right, 24, resolution.Scale, tolerance);
+                    Assert.InRange(Math.Abs(bounds[1].Top - display.Y -
+                        (display.Height - (bounds[1].Bottom - bounds[1].Top)) / 2d), 0, 1);
+                    AssertScaled(bounds[2].Right - bounds[2].Left, 520, resolution.Scale, tolerance);
+                    AssertScaled(bounds[2].Bottom - bounds[2].Top, 420, resolution.Scale, tolerance);
+                    AssertScaled(bounds[2].Left - display.X, 24, resolution.Scale, tolerance);
+                    AssertScaled(bounds[2].Top - display.Y, 24, resolution.Scale, tolerance);
+                    foreach (var panel in bounds) AssertInsideDisplay(panel, display);
                     AssertTransparentFrames(renderer, bounds);
 
                     var generations = renderer.PanelPresentationGenerations
@@ -132,12 +127,14 @@ public sealed class WidgetResolutionScaleTests
                                 Headline = $"해상도 검증 {index}"
                             })
                         .GetAwaiter().GetResult();
-                    // Each scaled Viewbox must still support a partial
-                    // region submit without replacing or resizing its HWND.
+                    // Updated information panels must retain their HWND and bounds;
+                    // the clock can reuse its frame within the same displayed second.
                     Assert.True(renderer.AllPanelsPresented);
                     Assert.All(renderer.PanelPresentationGenerations.Zip(
                         generations,
-                        (current, previous) => current > previous), Assert.True);
+                        (current, previous) => current >= previous), Assert.True);
+                    Assert.True(renderer.PanelPresentationGenerations[1] > generations[1]);
+                    Assert.True(renderer.PanelPresentationGenerations[2] > generations[2]);
                     Assert.Equal(bounds, renderer.PanelHandles
                         .Select(ReadPhysicalBounds).ToArray());
                     AssertTransparentFrames(renderer, bounds);
@@ -157,7 +154,7 @@ public sealed class WidgetResolutionScaleTests
 
     [Fact]
     [Trait("Category", "LocalIntegration")]
-    public void SystemWidget_WithoutClockScalesItsIndependentTopOffset()
+    public void SystemWidget_WithoutClockRemainsCenteredAtEveryResolution()
     {
         RunOnStaThread(() => RunWithOffscreenParent(parent =>
         {
@@ -188,9 +185,10 @@ public sealed class WidgetResolutionScaleTests
                     var panel = ReadPhysicalBounds(
                         Assert.Single(renderer.PanelHandles));
                     var tolerance = scale == 1 ? 0d : 2d;
-                    AssertScaled(panel.Top - display.Y, 330, scale, tolerance);
+                    Assert.InRange(Math.Abs(panel.Top - display.Y -
+                        (display.Height - (panel.Bottom - panel.Top)) / 2d), 0, 1);
                     AssertScaled(display.X + display.Width - panel.Right,
-                        25, scale, tolerance);
+                        24, scale, tolerance);
                     AssertScaled(panel.Right - panel.Left, 255, scale, tolerance);
                     AssertScaled(panel.Bottom - panel.Top, 285, scale, tolerance);
                     AssertInsideDisplay(panel, display);

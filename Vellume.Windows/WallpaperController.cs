@@ -123,6 +123,7 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 	public event EventHandler<QuickSlotLayoutChangedEventArgs>? QuickSlotLayoutChanged;
 
 	public event EventHandler<WidgetPlacementChangedEventArgs>? WidgetPlacementChanged;
+	public event EventHandler<StickerChangedEventArgs>? StickerChanged;
 
 	public WallpaperController(string webViewDataDirectory, IAppLogger logger, ISystemShortcutService systemShortcutService, WindowsSystemEventMonitor systemEventMonitor)
 	{
@@ -701,10 +702,12 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 				if (_widgetRenderer != null)
 				{
 					_widgetRenderer.PlacementChanged -= WidgetRendererOnPlacementChanged;
+					_widgetRenderer.StickerChanged -= WidgetRendererOnStickerChanged;
 					await _widgetRenderer.CloseSafelyAsync();
 				}
 				_widgetRenderer = new NativeWidgetRendererWindow();
 				_widgetRenderer.PlacementChanged += WidgetRendererOnPlacementChanged;
+				_widgetRenderer.StickerChanged += WidgetRendererOnStickerChanged;
 				AttachWidgetRenderer(_widgetRenderer, hostHandle, display);
 				await _widgetRenderer.InitializeAsync(cancellationToken);
 			}
@@ -859,6 +862,20 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 		WidgetPlacementChanged?.Invoke(this, new WidgetPlacementChangedEventArgs(eventArgs.Kind, eventArgs.Placement));
 	}
 
+	private void WidgetRendererOnStickerChanged(object? sender, StickerChangedEventArgs args)
+    {
+        if (!_dispatcher.CheckAccess())
+        {
+            _dispatcher.BeginInvoke(() => WidgetRendererOnStickerChanged(sender, args));
+            return;
+        }
+        if (_disposed || !ReferenceEquals(sender, _widgetRenderer)) return;
+        var index = _widgetSettings.Stickers.FindIndex(item => item.Id == args.Sticker.Id);
+        if (index < 0) return;
+        _widgetSettings.Stickers[index] = args.Sticker.Copy();
+        StickerChanged?.Invoke(this, args);
+    }
+
 	private async Task CloseWallpaperCoreAsync()
 	{
 		IWallpaperRenderer? renderer = _renderer;
@@ -886,6 +903,7 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 		if (widgetRenderer != null)
 		{
 			widgetRenderer.PlacementChanged -= WidgetRendererOnPlacementChanged;
+			widgetRenderer.StickerChanged -= WidgetRendererOnStickerChanged;
 			await widgetRenderer.CloseSafelyAsync();
 		}
 	}
@@ -1413,7 +1431,7 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 		{
 			if (!settings.ShowClock && !settings.ShowSystemInfo)
 			{
-				return settings.ShowCodexCompanion;
+				return settings.ShowCodexCompanion || settings.Stickers.Any(item => item.IsVisible);
 			}
 			return true;
 		}

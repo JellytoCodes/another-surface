@@ -68,6 +68,7 @@ public sealed class MultiDisplayWallpaperController :
             PrimaryController_QuickSlotLayoutChanged;
         _primaryController.WidgetPlacementChanged +=
             PrimaryController_WidgetPlacementChanged;
+        _primaryController.StickerChanged += PrimaryController_StickerChanged;
         _systemEventMonitor.DesktopShellChanged +=
             SystemEventMonitor_DesktopShellChanged;
         _systemEventMonitor.DisplayConfigurationChanged +=
@@ -83,6 +84,7 @@ public sealed class MultiDisplayWallpaperController :
         QuickSlotLayoutChanged;
     public event EventHandler<WidgetPlacementChangedEventArgs>?
         WidgetPlacementChanged;
+    public event EventHandler<StickerChangedEventArgs>? StickerChanged;
 
     public async Task ApplyAsync(
         WallpaperItem wallpaper,
@@ -465,6 +467,7 @@ public sealed class MultiDisplayWallpaperController :
             PrimaryController_QuickSlotLayoutChanged;
         _primaryController.WidgetPlacementChanged -=
             PrimaryController_WidgetPlacementChanged;
+        _primaryController.StickerChanged -= PrimaryController_StickerChanged;
 
         await _operationLock.WaitAsync();
         try
@@ -811,6 +814,9 @@ public sealed class MultiDisplayWallpaperController :
         object? sender,
         WidgetPlacementChangedEventArgs eventArgs)
         => WidgetPlacementChanged?.Invoke(this, eventArgs);
+
+    private void PrimaryController_StickerChanged(object? sender, StickerChangedEventArgs args)
+        => StickerChanged?.Invoke(this, args);
 
     private async Task AttachRendererAsync(
         IWallpaperRenderer renderer,

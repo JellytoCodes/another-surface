@@ -17,7 +17,7 @@ namespace Vellume.Windows;
 /// </summary>
 internal sealed class WidgetEditingOverlayWindow : Window
 {
-    private readonly WidgetKind _kind;
+    private readonly WidgetKind? _kind;
     private readonly Border _frame;
     private nint _handle;
     private nint _desktopHandle;
@@ -32,11 +32,23 @@ internal sealed class WidgetEditingOverlayWindow : Window
     private int _requestedX;
     private int _requestedY;
     private bool _closed;
+    private int _transformMode;
+    private double _centerX;
+    private double _centerY;
+    private double _startDistance;
+    private double _startAngle;
+    private double _factor = 1;
+    private double _angle;
 
     internal WidgetEditingOverlayWindow(WidgetKind kind)
+        : this($"Vellume {kind} Position", false)
     {
         _kind = kind;
-        Title = $"Vellume {_kind} Position";
+    }
+
+    internal WidgetEditingOverlayWindow(string title, bool allowTransform)
+    {
+        Title = title;
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
         AllowsTransparency = true;
@@ -57,7 +69,14 @@ internal sealed class WidgetEditingOverlayWindow : Window
             CornerRadius = new CornerRadius(8),
             Cursor = Cursors.SizeAll
         };
-        Content = _frame;
+        var root = new Grid();
+        root.Children.Add(_frame);
+        if (allowTransform)
+        {
+            AddTransformHandle(root, "↻", "회전", 2, System.Windows.HorizontalAlignment.Center, VerticalAlignment.Top, Cursors.Hand);
+            AddTransformHandle(root, "↘", "크기 조절", 1, System.Windows.HorizontalAlignment.Right, VerticalAlignment.Bottom, Cursors.SizeNWSE);
+        }
+        Content = root;
         _frame.MouseLeftButtonDown += BeginDrag;
         _frame.MouseMove += ContinueDrag;
         _frame.MouseLeftButtonUp += EndDrag;
@@ -74,6 +93,47 @@ internal sealed class WidgetEditingOverlayWindow : Window
     }
 
     internal event Action<WidgetKind, int, int, bool>? DragPositionChanged;
+    internal event Action<int, int, bool>? PositionChanged;
+    internal event Action? TransformStarted;
+    internal event Action<double, double, bool>? TransformChanged;
+
+    private void AddTransformHandle(Grid root, string text, string tooltip, int mode,
+        System.Windows.HorizontalAlignment horizontal, VerticalAlignment vertical, System.Windows.Input.Cursor cursor)
+    {
+        var handle = new Border
+        {
+            Width = 24, Height = 24, CornerRadius = new CornerRadius(12),
+            HorizontalAlignment = horizontal, VerticalAlignment = vertical,
+            Background = new SolidColorBrush(Color.FromRgb(97, 80, 185)), Cursor = cursor, ToolTip = tooltip,
+            Child = new TextBlock { Text = text, Foreground = Brushes.White,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+        };
+        handle.MouseLeftButtonDown += (_, e) =>
+        {
+            if (!GetPhysicalCursorPos(out _startCursor)) return;
+            _transformMode = mode;
+            _centerX = _x + _pixelWidth / 2d;
+            _centerY = _y + _pixelHeight / 2d;
+            _startDistance = Math.Max(1, Math.Sqrt(Math.Pow(_startCursor.X - _centerX, 2) + Math.Pow(_startCursor.Y - _centerY, 2)));
+            _startAngle = Math.Atan2(_startCursor.Y - _centerY, _startCursor.X - _centerX);
+            _factor = 1;
+            _angle = 0;
+            TransformStarted?.Invoke();
+            _dragging = _frame.CaptureMouse();
+            e.Handled = true;
+        };
+        root.Children.Add(handle);
+    }
+
+    private void RaiseChange(bool completed)
+    {
+        if (_transformMode != 0) TransformChanged?.Invoke(_factor, _angle, completed);
+        else
+        {
+            if (_kind is { } kind) DragPositionChanged?.Invoke(kind, _requestedX, _requestedY, completed);
+            PositionChanged?.Invoke(_requestedX, _requestedY, completed);
+        }
+    }
 
     internal nint Handle => _handle;
 
@@ -106,7 +166,7 @@ internal sealed class WidgetEditingOverlayWindow : Window
         {
             _dragging = false;
             _frame.ReleaseMouseCapture();
-            DragPositionChanged?.Invoke(_kind, _requestedX, _requestedY, true);
+            RaiseChange(true);
         }
         if (!_closed)
         {
@@ -140,6 +200,9 @@ internal sealed class WidgetEditingOverlayWindow : Window
         _dragging = false;
         _frame.ReleaseMouseCapture();
         DragPositionChanged = null;
+        PositionChanged = null;
+        TransformStarted = null;
+        TransformChanged = null;
         Close();
     }
 
@@ -150,6 +213,7 @@ internal sealed class WidgetEditingOverlayWindow : Window
             return;
         }
         _startX = _x;
+        _transformMode = 0;
         _startY = _y;
         _requestedX = _x;
         _requestedY = _y;
@@ -163,9 +227,16 @@ internal sealed class WidgetEditingOverlayWindow : Window
         {
             return;
         }
-        _requestedX = _startX + cursor.X - _startCursor.X;
-        _requestedY = _startY + cursor.Y - _startCursor.Y;
-        DragPositionChanged?.Invoke(_kind, _requestedX, _requestedY, false);
+        if (_transformMode == 1)
+            _factor = Math.Sqrt(Math.Pow(cursor.X - _centerX, 2) + Math.Pow(cursor.Y - _centerY, 2)) / _startDistance;
+        else if (_transformMode == 2)
+            _angle = (Math.Atan2(cursor.Y - _centerY, cursor.X - _centerX) - _startAngle) * 180 / Math.PI;
+        else
+        {
+            _requestedX = _startX + cursor.X - _startCursor.X;
+            _requestedY = _startY + cursor.Y - _startCursor.Y;
+        }
+        RaiseChange(false);
         e.Handled = true;
     }
 
@@ -177,7 +248,7 @@ internal sealed class WidgetEditingOverlayWindow : Window
         }
         _dragging = false;
         _frame.ReleaseMouseCapture();
-        DragPositionChanged?.Invoke(_kind, _requestedX, _requestedY, true);
+        RaiseChange(true);
         e.Handled = true;
     }
 
@@ -186,7 +257,7 @@ internal sealed class WidgetEditingOverlayWindow : Window
         if (_dragging)
         {
             _dragging = false;
-            DragPositionChanged?.Invoke(_kind, _requestedX, _requestedY, true);
+            RaiseChange(true);
         }
     }
 

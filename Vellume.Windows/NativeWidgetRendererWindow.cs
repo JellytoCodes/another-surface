@@ -37,7 +37,7 @@ internal enum CodexCompanionVisualState
 /// Coordinates one bounded alpha surface per widget. Independent small windows
 /// preserve click-through pixels while permitting arbitrary monitor placement.
 /// </summary>
-internal sealed class NativeWidgetRendererWindow
+internal sealed partial class NativeWidgetRendererWindow
 {
     private const double ReferenceDisplayWidth = 1920;
     private const double ReferenceDisplayHeight = 1080;
@@ -313,7 +313,8 @@ internal sealed class NativeWidgetRendererWindow
            current.ClockStyle == next.ClockStyle &&
            HasSamePlacement(current.ClockPlacement, next.ClockPlacement) &&
            HasSamePlacement(current.SystemInfoPlacement, next.SystemInfoPlacement) &&
-           HasSamePlacement(current.CodexPlacement, next.CodexPlacement);
+           HasSamePlacement(current.CodexPlacement, next.CodexPlacement) &&
+           HasSameStickers(current, next);
 
     private static bool HasSamePlacement(WidgetPlacement a, WidgetPlacement b)
         => a.Anchor == b.Anchor && a.IsLocked == b.IsLocked &&
@@ -440,10 +441,13 @@ internal sealed class NativeWidgetRendererWindow
         {
             state.Editor?.SetVisible(_isWindowVisible);
         }
+        foreach (var state in _stickerHosts.Values.ToArray())
+            state.Editor?.SetVisible(_isWindowVisible);
     }
 
     private void DisposeWidgetHosts()
     {
+        DisposeStickerHosts();
         foreach (var state in _widgetHosts.Values)
         {
             state.Editor?.CloseSafely();
@@ -478,6 +482,11 @@ internal sealed class NativeWidgetRendererWindow
             return display.Id != state.Display.Id || display.X != state.Display.X ||
                    display.Y != state.Display.Y || display.Width != state.Display.Width ||
                    display.Height != state.Display.Height;
+        }) || _stickerHosts.Values.Any(state =>
+        {
+            var display = ResolveDisplay(state.Item.Placement);
+            return display.Id != state.Display.Id || display.X != state.Display.X ||
+                display.Y != state.Display.Y || display.Width != state.Display.Width || display.Height != state.Display.Height;
         });
 
     private void RebuildAlphaPanels()
@@ -491,6 +500,7 @@ internal sealed class NativeWidgetRendererWindow
             return;
         }
         RefreshAvailableDisplays();
+        CreateStickerHosts();
         if (_settings.ShowClock)
         {
             CreateWidgetHost(WidgetKind.Clock, CreateClock(_settings.ClockSide));
@@ -602,6 +612,7 @@ internal sealed class NativeWidgetRendererWindow
 
     private void ReattachAlphaPanels()
     {
+        ReattachStickerHosts();
         foreach (var state in _widgetHosts.Values)
         {
             state.Host.AttachTo(_hostHandle, state.X, state.Y, state.Host.Width, state.Host.Height);
@@ -1592,7 +1603,8 @@ internal sealed class NativeWidgetRendererWindow
     }
 
     private IEnumerable<BoundedDesktopPanelHost> EnumeratePanelHosts()
-        => _widgetHosts.Values.Select(state => state.Host);
+        => _widgetHosts.Values.Select(state => state.Host)
+            .Concat(_stickerHosts.Values.Select(state => state.Host));
 
     private void ClockTimerOnTick(
         object? sender,

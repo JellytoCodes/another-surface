@@ -468,6 +468,7 @@ public sealed class WidgetSettings
     // placements take precedence, and absent companion placement starts left.
     public WidgetSide CodexCompanionSide { get; set; } = WidgetSide.Left;
     public ClockStyle ClockStyle { get; set; } = ClockStyle.DigitalClean;
+    public List<StickerItem> Stickers { get; set; } = [];
     public WidgetPlacement ClockPlacement
     {
         get => _clockPlacement ??= WidgetPlacement.FromAnchor(
@@ -595,6 +596,10 @@ public sealed class WidgetSettings
             ClockPlacement = ClockPlacement.Copy(WidgetAnchor.TopRight),
             SystemInfoPlacement = SystemInfoPlacement.Copy(WidgetAnchor.CenterRight),
             CodexPlacement = CodexPlacement.Copy(WidgetAnchor.TopLeft),
+            Stickers = (Stickers ?? []).OfType<StickerItem>()
+                .Where(item => !string.IsNullOrWhiteSpace(item.Id) && StickerCatalog.Find(item.AssetName) is not null)
+                .DistinctBy(item => item.Id, StringComparer.Ordinal)
+                .Select(item => item.Copy()).ToList(),
             SnapQuickSlotsToGrid = SnapQuickSlotsToGrid,
             QuickSlotGridSize = gridSize,
             QuickSlots = slots,

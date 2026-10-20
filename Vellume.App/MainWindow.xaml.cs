@@ -110,6 +110,7 @@ public partial class MainWindow : Window
         _wallpaperController.QuickSlotLayoutChanged +=
             WallpaperController_QuickSlotLayoutChanged;
         _wallpaperController.WidgetPlacementChanged += WallpaperController_WidgetPlacementChanged;
+        _wallpaperController.StickerChanged += WallpaperController_StickerChanged;
         _hotkeyManager.SlotInvoked += QuickSlotHotkeyManager_SlotInvoked;
         SourceInitialized += Window_SourceInitialized;
         IsVisibleChanged += Window_IsVisibleChanged;
@@ -161,6 +162,7 @@ public partial class MainWindow : Window
         _quickSlotRuntimeTimer.Stop();
         _clockPreviewTimer?.Stop();
         _wallpaperController.WidgetPlacementChanged -= WallpaperController_WidgetPlacementChanged;
+        _wallpaperController.StickerChanged -= WallpaperController_StickerChanged;
         _quickSlotRuntimeTimer.Tick -=
             QuickSlotRuntimeTimerOnTick;
         IsVisibleChanged -= Window_IsVisibleChanged;
