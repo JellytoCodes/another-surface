@@ -15,6 +15,10 @@ public partial class MainWindow
     private sealed record StickerRow(string Id, string Name, bool CanMoveUp, bool CanMoveDown);
     private readonly List<StickerChoice> _stickerChoices = [];
     private bool _updatingStickerControls;
+    private readonly Dictionary<string, long> _stickerEditRevisions = new(StringComparer.Ordinal);
+
+    private long AdvanceStickerRevision(string id)
+        => _stickerEditRevisions[id] = _stickerEditRevisions.GetValueOrDefault(id) + 1;
 
     private void InitializeStickerControls()
     {
@@ -101,6 +105,7 @@ public partial class MainWindow
         var value = check.IsChecked == true;
         var isLock = ReferenceEquals(check, StickerLockCheckBox);
         var id = sticker.Id;
+        if (isLock) AdvanceStickerRevision(id);
         await CommitWidgetControlChangeAsync(() =>
         {
             var current = _settings.Widgets.Stickers.FirstOrDefault(item => item.Id == id);
@@ -179,22 +184,24 @@ public partial class MainWindow
             Dispatcher.BeginInvoke(new Action(() => WallpaperController_StickerChanged(sender, args)));
             return;
         }
-        _ = PersistStickerAsync(args.Sticker);
+        _ = PersistStickerAsync(args.Sticker, args.IsLockChange, AdvanceStickerRevision(args.Sticker.Id));
     }
 
-    private async Task PersistStickerAsync(StickerItem edited)
+    private async Task PersistStickerAsync(StickerItem edited, bool isLockChange, long revision)
     {
         var entered = false;
         try
         {
             await _widgetSettingsGate.WaitAsync(_libraryLifetime.Token);
             entered = true;
+            if (_stickerEditRevisions.GetValueOrDefault(edited.Id) != revision) return;
             var index = _settings.Widgets.Stickers.FindIndex(item => item.Id == edited.Id);
             // A queued gesture cannot resurrect a removed sticker or override a newer Lock.
-            if (index < 0 || _settings.Widgets.Stickers[index].Placement.IsLocked) return;
+            if (index < 0 || (!isLockChange && _settings.Widgets.Stickers[index].Placement.IsLocked)) return;
             var current = _settings.Widgets.Stickers[index];
             var next = edited.Copy();
             next.IsVisible = current.IsVisible;
+            if (!isLockChange) next.Placement.IsLocked = current.Placement.IsLocked;
             _settings.Widgets.Stickers[index] = next;
             RefreshStickerControls();
             await SaveAndRefreshWidgetsCoreAsync();

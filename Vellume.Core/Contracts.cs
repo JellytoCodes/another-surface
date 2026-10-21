@@ -64,14 +64,18 @@ public interface IWallpaperController : IAsyncDisposable
 
 public sealed class WidgetPlacementChangedEventArgs : EventArgs
 {
-    public WidgetPlacementChangedEventArgs(WidgetKind kind, WidgetPlacement placement)
+    public WidgetPlacementChangedEventArgs(WidgetKind kind, WidgetPlacement placement, double? scale = null, bool isLockChange = false)
     {
         Kind = kind;
         Placement = placement.Copy();
+        Scale = scale is { } value ? WidgetSettings.NormalizeWidgetScale(value) : null;
+        IsLockChange = isLockChange;
     }
 
     public WidgetKind Kind { get; }
     public WidgetPlacement Placement { get; }
+    public double? Scale { get; }
+    public bool IsLockChange { get; }
 }
 
 public interface ISystemShortcutService

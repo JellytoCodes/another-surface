@@ -39,14 +39,16 @@ internal sealed class WidgetEditingOverlayWindow : Window
     private double _startAngle;
     private double _factor = 1;
     private double _angle;
+    private int _resizeStartWidth;
+    private int _resizeStartHeight;
 
     internal WidgetEditingOverlayWindow(WidgetKind kind)
-        : this($"Vellume {kind} Position", false)
+        : this($"Vellume {kind} Position", false, allowResize: true)
     {
         _kind = kind;
     }
 
-    internal WidgetEditingOverlayWindow(string title, bool allowTransform)
+    internal WidgetEditingOverlayWindow(string title, bool allowTransform, bool allowResize = false)
     {
         Title = title;
         WindowStyle = WindowStyle.None;
@@ -74,6 +76,9 @@ internal sealed class WidgetEditingOverlayWindow : Window
         if (allowTransform)
         {
             AddTransformHandle(root, "↻", "회전", 2, System.Windows.HorizontalAlignment.Center, VerticalAlignment.Top, Cursors.Hand);
+        }
+        if (allowTransform || allowResize)
+        {
             AddTransformHandle(root, "↘", "크기 조절", 1, System.Windows.HorizontalAlignment.Right, VerticalAlignment.Bottom, Cursors.SizeNWSE);
         }
         Content = root;
@@ -112,6 +117,8 @@ internal sealed class WidgetEditingOverlayWindow : Window
         {
             if (!GetPhysicalCursorPos(out _startCursor)) return;
             _transformMode = mode;
+            _resizeStartWidth = _pixelWidth;
+            _resizeStartHeight = _pixelHeight;
             _centerX = _x + _pixelWidth / 2d;
             _centerY = _y + _pixelHeight / 2d;
             _startDistance = Math.Max(1, Math.Sqrt(Math.Pow(_startCursor.X - _centerX, 2) + Math.Pow(_startCursor.Y - _centerY, 2)));
@@ -228,7 +235,11 @@ internal sealed class WidgetEditingOverlayWindow : Window
             return;
         }
         if (_transformMode == 1)
-            _factor = Math.Sqrt(Math.Pow(cursor.X - _centerX, 2) + Math.Pow(cursor.Y - _centerY, 2)) / _startDistance;
+            _factor = _kind is not null
+                ? Math.Max(0.01, 1 + ((double)_resizeStartWidth * (cursor.X - _startCursor.X) +
+                    (double)_resizeStartHeight * (cursor.Y - _startCursor.Y)) /
+                    ((double)_resizeStartWidth * _resizeStartWidth + (double)_resizeStartHeight * _resizeStartHeight))
+                : Math.Sqrt(Math.Pow(cursor.X - _centerX, 2) + Math.Pow(cursor.Y - _centerY, 2)) / _startDistance;
         else if (_transformMode == 2)
             _angle = (Math.Atan2(cursor.Y - _centerY, cursor.X - _centerX) - _startAngle) * 180 / Math.PI;
         else

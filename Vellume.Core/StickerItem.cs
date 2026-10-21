@@ -58,7 +58,8 @@ public static class StickerCatalog
     }
 }
 
-public sealed class StickerChangedEventArgs(StickerItem sticker) : EventArgs
+public sealed class StickerChangedEventArgs(StickerItem sticker, bool isLockChange = false) : EventArgs
 {
     public StickerItem Sticker { get; } = sticker.Copy();
+    public bool IsLockChange { get; } = isLockChange;
 }

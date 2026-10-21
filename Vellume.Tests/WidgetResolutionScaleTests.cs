@@ -234,6 +234,66 @@ public sealed class WidgetResolutionScaleTests
             finally { Assert.True(renderer.CloseSafelyAsync().IsCompletedSuccessfully); }
         }));
 
+    [Theory]
+    [InlineData(WidgetKind.Clock, 1920, 1080)]
+    [InlineData(WidgetKind.SystemInfo, 1920, 1080)]
+    [InlineData(WidgetKind.CodexCompanion, 1920, 1080)]
+    [InlineData(WidgetKind.Clock, 3840, 2160)]
+    [InlineData(WidgetKind.SystemInfo, 3840, 2160)]
+    [InlineData(WidgetKind.CodexCompanion, 3840, 2160)]
+    [Trait("Category", "LocalIntegration")]
+    public void FreeResize_CommitsContinuousScaleOnRelease_AndLockCanBeReversed(WidgetKind kind, int width, int height)
+        => RunOnStaThread(() => RunWithOffscreenParent(parent =>
+        {
+            var renderer = new NativeWidgetRendererWindow();
+            try
+            {
+                var settings = new WidgetSettings { ShowClock = kind == WidgetKind.Clock,
+                    ShowSystemInfo = kind == WidgetKind.SystemInfo, ShowCodexCompanion = kind == WidgetKind.CodexCompanion };
+                settings.SetPlacement(kind, new WidgetPlacement { Anchor = WidgetAnchor.Custom, X = 0.2, Y = 0.25, IsLocked = false });
+                Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
+                var display = CreateDisplay(width, height);
+                renderer.AttachTo(parent, display);
+                Assert.True(renderer.InitializeAsync(CancellationToken.None).IsCompletedSuccessfully);
+                var handle = Assert.Single(renderer.PanelHandles);
+                var editor = Assert.Single(renderer.EditingHandles);
+                Assert.True(NativeMethods.IsWindow(editor));
+                var original = ReadPhysicalBounds(handle);
+                var changes = new List<WidgetPlacementChangedEventArgs>();
+                renderer.PlacementChanged += (_, args) => changes.Add(args);
+                renderer.ResizeWidget(kind, 1.137, false);
+                Assert.Empty(changes);
+                Assert.Equal(handle, Assert.Single(renderer.PanelHandles));
+                renderer.ResizeWidget(kind, 1.313, true);
+                var resized = ReadPhysicalBounds(handle);
+                Assert.InRange(Math.Abs((resized.Right - resized.Left) - (original.Right - original.Left) * 1.313), 0, 2);
+                Assert.InRange(Math.Abs((resized.Bottom - resized.Top) - (original.Bottom - original.Top) * 1.313), 0, 2);
+                Assert.Equal(original.Left, resized.Left);
+                Assert.Equal(original.Top, resized.Top);
+                Assert.Equal(1.313, Assert.Single(changes).Scale);
+                Assert.False(changes[0].IsLockChange);
+                renderer.SetWidgetLocked(kind, true);
+                Assert.False(NativeMethods.IsWindow(editor));
+                Assert.Empty(renderer.EditingHandles);
+                Assert.True(changes[^1].IsLockChange);
+                Assert.True(changes[^1].Placement.IsLocked);
+                var count = changes.Count;
+                renderer.ResizeWidget(kind, 1.9, true);
+                renderer.MoveWidget(kind, display.X, display.Y, true);
+                Assert.Equal(count, changes.Count);
+                renderer.SetWidgetLocked(kind, false);
+                Assert.True(changes[^1].IsLockChange);
+                Assert.False(changes[^1].Placement.IsLocked);
+                Assert.True(NativeMethods.IsWindow(Assert.Single(renderer.EditingHandles)));
+                renderer.MoveWidget(kind, resized.Left + 20, resized.Top + 20, true);
+                var moved = ReadPhysicalBounds(Assert.Single(renderer.PanelHandles));
+                Assert.Equal(resized.Right - resized.Left, moved.Right - moved.Left);
+                Assert.Equal(resized.Bottom - resized.Top, moved.Bottom - moved.Top);
+                Assert.True(renderer.AllPanelsPresented);
+            }
+            finally { Assert.True(renderer.CloseSafelyAsync().IsCompletedSuccessfully); }
+        }));
+
     private static void AssertScaled(
         int actual,
         double reference,

@@ -469,6 +469,8 @@ public sealed class WidgetSettings
     public WidgetSide CodexCompanionSide { get; set; } = WidgetSide.Left;
     public ClockStyle ClockStyle { get; set; } = ClockStyle.DigitalClean;
     public string ClockColor { get; set; } = "#FFFFFF";
+    public double ClockScale { get; set; } = 1;
+    public double CodexScale { get; set; } = 1;
     public SystemInfoAppearance SystemInfoAppearance { get; set; } = new();
     // Front to back: the first sticker has the highest layer priority.
     public List<StickerItem> Stickers { get; set; } = [];
@@ -597,6 +599,8 @@ public sealed class WidgetSettings
                 ? ClockStyle
                 : ClockStyle.DigitalClean,
             ClockColor = NormalizeClockColor(ClockColor),
+            ClockScale = NormalizeWidgetScale(ClockScale),
+            CodexScale = NormalizeWidgetScale(CodexScale),
             SystemInfoAppearance = (SystemInfoAppearance ?? new()).Copy(),
             ClockPlacement = ClockPlacement.Copy(WidgetAnchor.TopRight),
             SystemInfoPlacement = SystemInfoPlacement.Copy(WidgetAnchor.CenterRight),
@@ -630,6 +634,29 @@ public sealed class WidgetSettings
             WidgetKind.CodexCompanion => CodexPlacement,
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
+
+    public double GetScale(WidgetKind kind) => NormalizeWidgetScale(kind switch
+    {
+        WidgetKind.Clock => ClockScale,
+        WidgetKind.SystemInfo => SystemInfoAppearance.Scale,
+        WidgetKind.CodexCompanion => CodexScale,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind))
+    });
+
+    public void SetScale(WidgetKind kind, double scale)
+    {
+        var normalized = NormalizeWidgetScale(scale);
+        switch (kind)
+        {
+            case WidgetKind.Clock: ClockScale = normalized; break;
+            case WidgetKind.SystemInfo: SystemInfoAppearance.Scale = normalized; break;
+            case WidgetKind.CodexCompanion: CodexScale = normalized; break;
+            default: throw new ArgumentOutOfRangeException(nameof(kind));
+        }
+    }
+
+    public static double NormalizeWidgetScale(double scale)
+        => double.IsFinite(scale) ? Math.Clamp(scale, 0.5, 2) : 1;
 
     public void SetPlacement(WidgetKind kind, WidgetPlacement placement)
     {

@@ -859,7 +859,8 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 			return;
 		}
 		_widgetSettings.SetPlacement(eventArgs.Kind, eventArgs.Placement);
-		WidgetPlacementChanged?.Invoke(this, new WidgetPlacementChangedEventArgs(eventArgs.Kind, eventArgs.Placement));
+        if (eventArgs.Scale is { } scale) _widgetSettings.SetScale(eventArgs.Kind, scale);
+		WidgetPlacementChanged?.Invoke(this, eventArgs);
 	}
 
 	private void WidgetRendererOnStickerChanged(object? sender, StickerChangedEventArgs args)

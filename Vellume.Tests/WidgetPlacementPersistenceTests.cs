@@ -21,6 +21,9 @@ public sealed class WidgetPlacementPersistenceTests
                 {
                     ClockStyle = style,
                     ClockColor = "#89E0D5",
+                    ClockScale = 1.137,
+                    CodexScale = 0.863,
+                    SystemInfoAppearance = new SystemInfoAppearance { Scale = 1.173 },
                     ClockPlacement = new WidgetPlacement
                     {
                         Anchor = WidgetAnchor.Custom,
@@ -41,6 +44,9 @@ public sealed class WidgetPlacementPersistenceTests
             Assert.Equal(AppSettings.CurrentSchemaVersion, restored.SchemaVersion);
             Assert.Equal(style, restored.Widgets.ClockStyle);
             Assert.Equal("#89E0D5", restored.Widgets.ClockColor);
+            Assert.Equal(1.137, restored.Widgets.ClockScale);
+            Assert.Equal(0.863, restored.Widgets.CodexScale);
+            Assert.Equal(1.173, restored.Widgets.SystemInfoAppearance.Scale);
             Assert.Equal(WidgetAnchor.Custom, restored.Widgets.ClockPlacement.Anchor);
             Assert.Equal(0.31, restored.Widgets.ClockPlacement.X);
             Assert.Equal(0.72, restored.Widgets.ClockPlacement.Y);

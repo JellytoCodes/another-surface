@@ -97,6 +97,16 @@ internal sealed class LayeredWpfPanelHost : IDisposable
         Handle != nint.Zero &&
         NativeMethods.IsWindow(Handle);
 
+    internal bool HitTest(int x, int y)
+    {
+        var pixels = _pixelBuffer;
+        var width = Width;
+        var height = Height;
+        if (x < 0 || y < 0 || x >= width || y >= height) return false;
+        var index = ((long)y * width + x) * 4 + 3;
+        return index < pixels.Length && pixels[index] > 16;
+    }
+
     internal bool IsAttachedTo(nint parentHandle)
         => IsReady &&
            _desktopHandle == parentHandle &&

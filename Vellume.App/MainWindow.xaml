@@ -494,6 +494,8 @@
                                     <CheckBox x:Name="CodexLockCheckBox" Grid.Row="3" Grid.Column="4" Content="Lock" Tag="CodexCompanion" Margin="12,0,0,0" VerticalAlignment="Center"
                                               Checked="WidgetLock_Changed" Unchecked="WidgetLock_Changed"/>
                                 </Grid>
+                                <TextBlock Text="드래그로 이동 · ↘ 손잡이로 크기 조절 · 우클릭 Lock · Alt+우클릭 Unlock"
+                                           Foreground="{StaticResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,0"/>
                                 <CheckBox x:Name="QuickSlotsWidgetCheckBox" Visibility="Collapsed"/>
                             </StackPanel>
                         </Border>
@@ -614,7 +616,7 @@
                                     </WrapPanel>
                                 </StackPanel>
                                 <TextBlock x:Name="StickerStatusText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
-                                <TextBlock Text="목록 위쪽의 스티커가 앞에 표시됩니다. Lock을 켜면 편집 테두리가 사라집니다. 전체 Lock은 스티커에도 적용됩니다."
+                                <TextBlock Text="목록 위쪽의 스티커가 앞에 표시됩니다. 우클릭으로 Lock, Alt+우클릭으로 Unlock합니다. 전체 Lock은 스티커에도 적용됩니다."
                                            TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,12,0,0"/>
                             </StackPanel>
                         </Border>

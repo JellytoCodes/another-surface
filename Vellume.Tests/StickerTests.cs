@@ -174,6 +174,62 @@ public sealed class StickerTests
             Assert.Empty(renderer.StickerEditingHandles);
         }));
 
+    [Fact]
+    [Trait("Category", "LocalIntegration")]
+    public void ShortcutLock_AndUnlock_PreserveStickerTransformAndAllowEditingAgain()
+        => RunOnSta(() => WithRenderer((renderer, display) =>
+        {
+            var sticker = new StickerItem { AssetName = StickerCatalog.All[1].FileName, Size = 321, Rotation = 27 };
+            var settings = EmptyWidgets();
+            settings.Stickers = [sticker];
+            Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
+            var surface = Assert.Single(renderer.PanelHandles);
+            var changes = new List<StickerChangedEventArgs>();
+            renderer.StickerChanged += (_, args) => changes.Add(args);
+            renderer.SetStickerLocked(sticker.Id, true);
+            Assert.Empty(renderer.StickerEditingHandles);
+            Assert.True(Assert.Single(changes).IsLockChange);
+            Assert.True(changes[0].Sticker.Placement.IsLocked);
+            renderer.TransformSticker(sticker.Id, 555, 90, true);
+            Assert.Single(changes);
+            renderer.SetStickerLocked(sticker.Id, false);
+            Assert.Single(renderer.StickerEditingHandles);
+            Assert.Equal(surface, Assert.Single(renderer.PanelHandles));
+            Assert.False(changes[^1].Sticker.Placement.IsLocked);
+            Assert.Equal(321, changes[^1].Sticker.Size);
+            Assert.Equal(27, changes[^1].Sticker.Rotation);
+            renderer.TransformSticker(sticker.Id, 333, 30, true);
+            Assert.False(changes[^1].IsLockChange);
+            Assert.Equal(333, changes[^1].Sticker.Size);
+        }));
+
+    [Fact]
+    [Trait("Category", "LocalIntegration")]
+    public void PointerShortcut_OnlyTargetsDesktopPixelsOrTheMatchingEditor()
+        => RunOnSta(() => WithRenderer((renderer, display) =>
+        {
+            using var hook = new DesktopWidgetPointerHook(System.Windows.Threading.Dispatcher.CurrentDispatcher);
+            // This test's renderer is empty, so use a real offscreen HWND as the desktop root.
+            var root = NativeMethods.CreateWindowExW(0, "Static", "Shortcut hit test", unchecked((uint)NativeMethods.WsPopup),
+                -30000, -30000, 200, 200, nint.Zero, nint.Zero, NativeMethods.GetModuleHandleW(null), nint.Zero);
+            try
+            {
+                var top = new DesktopWidgetPointerHook.Target(0, 0, 100, 100, new nint(123), (x, y) => x == 10 && y == 10, _ => { });
+                var back = new DesktopWidgetPointerHook.Target(0, 0, 100, 100, nint.Zero, (x, y) => x == 20 && y == 20, _ => { });
+                hook.Update([top, back], root);
+                Assert.Same(top, hook.FindTarget(10, 10, true, root));
+                Assert.Same(back, hook.FindTarget(20, 20, true, root));
+                Assert.Null(hook.FindTarget(30, 30, true, root));
+                Assert.Null(hook.FindTarget(10, 10, false, root));
+                Assert.Null(hook.FindTarget(10, 10, true, new nint(456))); // A covering application.
+                Assert.Same(top, hook.FindTarget(30, 30, false, top.Editor));
+                Assert.Null(hook.FindTarget(120, 120, true, top.Editor));
+                hook.Update([]);
+                Assert.Null(hook.FindTarget(10, 10, true, root));
+            }
+            finally { NativeMethods.DestroyWindow(root); }
+        }));
+
     private static WidgetSettings EmptyWidgets() => new()
         { ShowClock = false, ShowSystemInfo = false, ShowCodexCompanion = false };
 

@@ -58,22 +58,7 @@ internal sealed partial class NativeWidgetRendererWindow
             {
                 RenderSticker(state);
                 _stickerHosts.Add(item.Id, state);
-                if (!item.Placement.IsLocked)
-                {
-                    var editor = new WidgetEditingOverlayWindow($"Vellume Sticker {asset.Name}", true);
-                    state.Editor = editor;
-                    editor.PositionChanged += (px, py, complete) => MoveSticker(item.Id, px, py, complete);
-                    var initialSize = item.Size;
-                    var initialRotation = item.Rotation;
-                    editor.TransformStarted += () =>
-                    {
-                        initialSize = state.Item.Size;
-                        initialRotation = state.Item.Rotation;
-                    };
-                    editor.TransformChanged += (factor, angle, complete) =>
-                        TransformSticker(item.Id, initialSize * factor, initialRotation + angle, complete);
-                    editor.SetBounds(_interactiveHostHandle, x, y, side, side, _isWindowVisible);
-                }
+                if (!item.Placement.IsLocked) CreateStickerEditor(state);
             }
             catch
             {
@@ -127,6 +112,7 @@ internal sealed partial class NativeWidgetRendererWindow
         }
         else state.Host.MoveTo(state.X, state.Y);
         state.Editor?.SetBounds(_interactiveHostHandle, state.X, state.Y, side, side, _isWindowVisible);
+        RefreshPointerTargets();
         if (completed) CompleteStickerEdit(state);
     }
 
@@ -150,6 +136,7 @@ internal sealed partial class NativeWidgetRendererWindow
         RenderSticker(state);
         state.Host.SetWindowVisible(_isWindowVisible);
         state.Editor?.SetBounds(_interactiveHostHandle, state.X, state.Y, side, side, _isWindowVisible);
+        RefreshPointerTargets();
         if (completed) CompleteStickerEdit(state);
     }
 

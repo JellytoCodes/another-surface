@@ -311,6 +311,7 @@ internal sealed partial class NativeWidgetRendererWindow
            current.SystemInfoSide == next.SystemInfoSide &&
            current.ClockStyle == next.ClockStyle &&
            current.ClockColor == next.ClockColor &&
+           current.ClockScale == next.ClockScale && current.CodexScale == next.CodexScale &&
            current.SystemInfoAppearance == next.SystemInfoAppearance &&
            HasSamePlacement(current.ClockPlacement, next.ClockPlacement) &&
            HasSamePlacement(current.SystemInfoPlacement, next.SystemInfoPlacement) &&
@@ -418,6 +419,8 @@ internal sealed partial class NativeWidgetRendererWindow
         }
 
         _disposed = true;
+        _pointerHook?.Dispose();
+        _pointerHook = null;
         _initialized = false;
         _clockTimer.Stop();
         _clockTimer.Tick -= ClockTimerOnTick;
@@ -444,10 +447,12 @@ internal sealed partial class NativeWidgetRendererWindow
         }
         foreach (var state in _stickerHosts.Values.ToArray())
             state.Editor?.SetVisible(_isWindowVisible);
+        RefreshPointerTargets();
     }
 
     private void DisposeWidgetHosts()
     {
+        _pointerHook?.Update([]);
         DisposeStickerHosts();
         foreach (var state in _widgetHosts.Values)
         {
@@ -522,10 +527,11 @@ internal sealed partial class NativeWidgetRendererWindow
     {
         var placement = _settings.GetPlacement(kind);
         var display = ResolveDisplay(placement);
-        var scale = CalculateResolutionScale(display.Width, display.Height);
+        var resolutionScale = CalculateResolutionScale(display.Width, display.Height);
+        var scale = resolutionScale * _settings.GetScale(kind);
         var prepared = PrepareLayeredPanel(visual, scale);
         var position = WidgetPlacementLayout.Resolve(placement,
-            display.Width, display.Height, prepared.Width, prepared.Height, 24 * scale);
+            display.Width, display.Height, prepared.Width, prepared.Height, 24 * resolutionScale);
         var x = display.X + (int)Math.Round(position.X);
         var y = display.Y + (int)Math.Round(position.Y);
         var host = new BoundedDesktopPanelHost($"Vellume Alpha {kind} Widget",
@@ -535,7 +541,7 @@ internal sealed partial class NativeWidgetRendererWindow
             host.Render(prepared.Visual);
             var naturalWidth = double.IsNaN(visual.Width) ? visual.DesiredSize.Width : visual.Width;
             var naturalHeight = double.IsNaN(visual.Height) ? visual.DesiredSize.Height : visual.Height;
-            var state = new WidgetHostState(kind, host, display, x, y, naturalWidth, naturalHeight);
+            var state = new WidgetHostState(kind, host, display, x, y, naturalWidth, naturalHeight, visual);
             _widgetHosts.Add(kind, state);
             var target = new WidgetPanelRenderTarget(kind, prepared.Visual, prepared.Width, prepared.Height);
             switch (kind)
@@ -550,12 +556,7 @@ internal sealed partial class NativeWidgetRendererWindow
                     _codexRenderTarget = target;
                     break;
             }
-            if (!placement.IsLocked)
-            {
-                state.Editor = new WidgetEditingOverlayWindow(kind);
-                state.Editor.DragPositionChanged += MoveWidget;
-                state.Editor.SetBounds(_interactiveHostHandle, x, y, prepared.Width, prepared.Height, _isWindowVisible);
-            }
+            if (!placement.IsLocked) CreateWidgetEditor(state);
         }
         catch
         {
@@ -578,7 +579,8 @@ internal sealed partial class NativeWidgetRendererWindow
         var display = _availableDisplays.FirstOrDefault(candidate =>
             centerX >= candidate.X && centerX < candidate.X + candidate.Width &&
             centerY >= candidate.Y && centerY < candidate.Y + candidate.Height) ?? state.Display;
-        var scale = CalculateResolutionScale(display.Width, display.Height);
+        var resolutionScale = CalculateResolutionScale(display.Width, display.Height);
+        var scale = resolutionScale * _settings.GetScale(kind);
         var placementWidth = completed
             ? Math.Max(1, (int)Math.Ceiling(state.NaturalWidth * scale)) : state.Host.Width;
         var placementHeight = completed
@@ -586,15 +588,16 @@ internal sealed partial class NativeWidgetRendererWindow
         var placement = WidgetPlacementLayout.FromPosition(
             requestedX - display.X, requestedY - display.Y,
             display.Width, display.Height, placementWidth, placementHeight,
-            24 * scale, isLocked: false, displayId: display.Id);
+            24 * resolutionScale, isLocked: false, displayId: display.Id);
         var position = WidgetPlacementLayout.Resolve(placement,
-            display.Width, display.Height, placementWidth, placementHeight, 24 * scale);
+            display.Width, display.Height, placementWidth, placementHeight, 24 * resolutionScale);
         state.X = display.X + (int)Math.Round(position.X);
         state.Y = display.Y + (int)Math.Round(position.Y);
         state.Display = display;
         state.Host.MoveTo(state.X, state.Y);
         state.Editor?.SetBounds(_interactiveHostHandle, state.X, state.Y,
             state.Host.Width, state.Host.Height, _isWindowVisible);
+        RefreshPointerTargets();
         if (completed)
         {
             _settings.SetPlacement(kind, placement);
@@ -697,7 +700,7 @@ internal sealed partial class NativeWidgetRendererWindow
 
     internal FrameworkElement CreateSystemPanel(WidgetSide side)
     {
-        _systemInfoVisual = new SystemInfoVisual(_settings.SystemInfoAppearance);
+        _systemInfoVisual = new SystemInfoVisual(_settings.SystemInfoAppearance with { Scale = 1 });
         return _systemInfoVisual;
     }
 
@@ -1611,8 +1614,9 @@ internal sealed partial class NativeWidgetRendererWindow
 
     private sealed class WidgetHostState(
         WidgetKind kind, BoundedDesktopPanelHost host, DisplayInfo display, int x, int y,
-        double naturalWidth, double naturalHeight)
+        double naturalWidth, double naturalHeight, FrameworkElement content)
     {
+        internal FrameworkElement Content { get; } = content;
         internal WidgetKind Kind { get; } = kind;
         internal BoundedDesktopPanelHost Host { get; } = host;
         internal DisplayInfo Display { get; set; } = display;

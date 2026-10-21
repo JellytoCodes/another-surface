@@ -262,7 +262,7 @@ public partial class MainWindow
             var placement = _settings.Widgets.GetPlacement(kind).Copy();
             placement.IsLocked = locked;
             _settings.Widgets.SetPlacement(kind, placement);
-        });
+        }, kind);
     }
 
     private async void LockAllWidgets_Click(object sender, RoutedEventArgs args)
@@ -270,11 +270,16 @@ public partial class MainWindow
         {
             foreach (var kind in Enum.GetValues<WidgetKind>())
             {
+                Interlocked.Increment(ref _widgetPlacementRevisions[(int)kind]);
                 var placement = _settings.Widgets.GetPlacement(kind).Copy();
                 placement.IsLocked = true;
                 _settings.Widgets.SetPlacement(kind, placement);
             }
-            foreach (var sticker in _settings.Widgets.Stickers) sticker.Placement.IsLocked = true;
+            foreach (var sticker in _settings.Widgets.Stickers)
+            {
+                AdvanceStickerRevision(sticker.Id);
+                sticker.Placement.IsLocked = true;
+            }
         });
 
     private void WallpaperController_WidgetPlacementChanged(object? sender, WidgetPlacementChangedEventArgs args)
@@ -295,8 +300,9 @@ public partial class MainWindow
             entered = true;
             if (revision != Volatile.Read(ref _widgetPlacementRevisions[(int)args.Kind])) return;
             var placement = args.Placement.Copy();
-            placement.IsLocked = _settings.Widgets.GetPlacement(args.Kind).IsLocked;
+            if (!args.IsLockChange) placement.IsLocked = _settings.Widgets.GetPlacement(args.Kind).IsLocked;
             _settings.Widgets.SetPlacement(args.Kind, placement);
+            if (args.Scale is { } scale) _settings.Widgets.SetScale(args.Kind, scale);
             RefreshWidgetPlacementControls();
             await SaveAndRefreshWidgetsCoreAsync();
         }

@@ -60,6 +60,8 @@ internal sealed class BoundedDesktopPanelHost : IDisposable
         => IsReady &&
            _surface.IsAttachedTo(desktopHandle);
 
+    internal bool HitTest(int x, int y) => _surface.HitTest(x, y);
+
     internal void Render(FrameworkElement visual)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
