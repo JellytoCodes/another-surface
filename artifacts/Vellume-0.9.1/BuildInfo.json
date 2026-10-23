@@ -1,0 +1,293 @@
+{
+  "Version": "0.9.1",
+  "SourceCommit": "31fd513953279da16fc1afc2f0fd07e667be41d6",
+  "SourceDirty": false,
+  "Configuration": "Release",
+  "BuiltAtUtc": "2026-10-23T14:31:05.0611236Z",
+  "Files": [
+    {
+      "Path": "Microsoft.Web.WebView2.Core.dll",
+      "SHA256": "24B1A6BE3A7956E00D0509D4EAEBF08E418FC219E964B6C269D2E04439333685"
+    },
+    {
+      "Path": "Microsoft.Web.WebView2.Core.xml",
+      "SHA256": "8684CD74000C77533E563785208308ADA63808DA85825206856CAB11A9EEFFCE"
+    },
+    {
+      "Path": "Microsoft.Web.WebView2.WinForms.dll",
+      "SHA256": "FA6B956E42CBC9368D57E062E819D1DC65BDEA5F67F3BBF2C004C3E88A3C222B"
+    },
+    {
+      "Path": "Microsoft.Web.WebView2.WinForms.xml",
+      "SHA256": "6A8EC199373824FDEBCEDA7B3D780D0B31C82EDCEAE04D92391027C971DEA6C2"
+    },
+    {
+      "Path": "Microsoft.Web.WebView2.Wpf.dll",
+      "SHA256": "04151E577D83C6FE7A1BD1DC402B49DB53DDBD1C48F031AFC094B847B551BCA6"
+    },
+    {
+      "Path": "Microsoft.Web.WebView2.Wpf.xml",
+      "SHA256": "3C68C150D60D39FBBE8B0801FFE773D353B211988ECA095671BB3FC8192643C3"
+    },
+    {
+      "Path": "Microsoft.Windows.SDK.NET.dll",
+      "SHA256": "43B12F190D22F258039DF567EF407333DC41DC95AC7B232DBF94AAB069C65BBB"
+    },
+    {
+      "Path": "README.md",
+      "SHA256": "5BBDC004C9222B8E744A07BBBA3D9D1D13FA1C68ACDDA297FE8F47B1FA76768F"
+    },
+    {
+      "Path": "Vellume.App.deps.json",
+      "SHA256": "3E03D51E3D562C71363D98885467FA65616A9CDC67AF362E9E50C6E697764E3C"
+    },
+    {
+      "Path": "Vellume.App.dll",
+      "SHA256": "58FC8BFB6C7E3AFDC23855CD32B8173C1C9D425C72094507AA4DF5D61E3938A8"
+    },
+    {
+      "Path": "Vellume.App.exe",
+      "SHA256": "F21CBB123227477A739D5BC0BC449580D0DCAE5EA8E8D537461BEF2617B2EC87"
+    },
+    {
+      "Path": "Vellume.App.pdb",
+      "SHA256": "0E94B33973C61AC28AFD2C517A466DC76563E016B20B297225E2EC637AB8ACD4"
+    },
+    {
+      "Path": "Vellume.App.runtimeconfig.json",
+      "SHA256": "89AD1EA5C9C20B6B266547EF27C0AE3840CAB5642D3C2AEDF06B7026245671DD"
+    },
+    {
+      "Path": "Vellume.Core.dll",
+      "SHA256": "D75D9F7070305D52B30639F117FBF78FD64558E9BCD0A4DDB86AB498574ADF50"
+    },
+    {
+      "Path": "Vellume.Core.pdb",
+      "SHA256": "11F5C2FC59DA77675E2816FE38A0AADCC9C4D3F2D349B84DE7B6E8EF1E342CA8"
+    },
+    {
+      "Path": "Vellume.Renderer.Native.exe",
+      "SHA256": "FD4FD145E534F766F2B6CBC1ABC8459ABC497587189689FBEF8852D963F5498E"
+    },
+    {
+      "Path": "Vellume.Windows.dll",
+      "SHA256": "9ED5C2A1C993A60ED90443D872B804537F771358357933A07E0028437CFD62B7"
+    },
+    {
+      "Path": "Vellume.Windows.pdb",
+      "SHA256": "7AA58A99222508ECBF563B5C9BC78DBE64850680463E6F4AA804C6832C3C9FF3"
+    },
+    {
+      "Path": "WinRT.Runtime.dll",
+      "SHA256": "BCF3A14E8712A90837FC5C0D8C8A24696AF2BD7F74E9767597EC81EDEDFB23DB"
+    },
+    {
+      "Path": "Assets\\Brand\\vellume-dock-icon-v2.png",
+      "SHA256": "5551CB549065190FC36DE270186C6F43D2AC0D6B246FF53A58479F7318AE31B6"
+    },
+    {
+      "Path": "Assets\\Brand\\vellume-dock-icon-v3.png",
+      "SHA256": "371F1E880BBD81C65926AE6F87A3F07E1A7F561425C6F18A5FE0187DD68FD594"
+    },
+    {
+      "Path": "Assets\\Brand\\vellume-dock-icon.png",
+      "SHA256": "71F559022F0BC56577CEB0F20104D262EA028C66E941319B8B19EB21A40420F4"
+    },
+    {
+      "Path": "Assets\\Brand\\SystemShortcuts\\file-explorer-chibi.png",
+      "SHA256": "67DEAC495286EED00C58B09FCB919C16B832A5CAD190B412E20BC8A85A74FDA9"
+    },
+    {
+      "Path": "Assets\\Brand\\SystemShortcuts\\file-explorer-companion.png",
+      "SHA256": "CB8E750B72C4244EF38A2E96C82EFFE9365042C15C358306DC5F36EA2C6FAD0B"
+    },
+    {
+      "Path": "Assets\\Brand\\SystemShortcuts\\file-explorer.png",
+      "SHA256": "1EA175374C4A63C7E58AE1531D505139207F3EECDD763D9CD14E593CD3B20CE4"
+    },
+    {
+      "Path": "Assets\\Brand\\SystemShortcuts\\powershell-chibi.png",
+      "SHA256": "D28AAD8383E9EAA9C97D996E500E0BCFB236490F9F50F1C6D72C89C142C0A157"
+    },
+    {
+      "Path": "Assets\\Brand\\SystemShortcuts\\powershell-companion.png",
+      "SHA256": "4E0D1ED8D27C651A19D1E724BF72C3310C862731D1C21D1F28A02372D9912FF2"
+    },
+    {
+      "Path": "Assets\\Brand\\SystemShortcuts\\powershell.png",
+      "SHA256": "2187705723225EFB1354FD712F133FA95311E3412266FAD4354E8FCF27EB3013"
+    },
+    {
+      "Path": "Assets\\Brand\\SystemShortcuts\\recycle-bin-empty-chibi.png",
+      "SHA256": "DEF8366BE47702FD91B96894BD615B1D2CFA415C7BDFD64FC830760EF29E3B1A"
+    },
+    {
+      "Path": "Assets\\Brand\\SystemShortcuts\\recycle-bin-empty-companion.png",
+      "SHA256": "3FF6AE1B122CD5821495DE117D7C1425D7184FECDDE49207EACD77FC2DE31DE0"
+    },
+    {
+      "Path": "Assets\\Brand\\SystemShortcuts\\recycle-bin-empty.png",
+      "SHA256": "CBE18D4EC1A9E22FE4E94368263568E0C85A74E80E07546D1DF2F696910EC131"
+    },
+    {
+      "Path": "Assets\\Brand\\SystemShortcuts\\recycle-bin-full-chibi.png",
+      "SHA256": "2FEB0D32DA3E96FD5C0C6F3AF8C480EAFD95E140D278E372F1D130E723877CA1"
+    },
+    {
+      "Path": "Assets\\Brand\\SystemShortcuts\\recycle-bin-full-companion.png",
+      "SHA256": "49252940640FA9593BB6C1541D6E7F7C1DEAC04C65E57240BC3956B21C8D1CD5"
+    },
+    {
+      "Path": "Assets\\Brand\\SystemShortcuts\\recycle-bin-full.png",
+      "SHA256": "2AAA44266201332926077C0744FF7374608FDDEF97830C7BA11D5C968E88751A"
+    },
+    {
+      "Path": "Assets\\Brand\\SystemShortcuts\\this-pc-chibi.png",
+      "SHA256": "671E9ECB9E6841B92DD44202BD7CA0863321171198E556D09CFC852A36D35CC5"
+    },
+    {
+      "Path": "Assets\\Brand\\SystemShortcuts\\this-pc-companion.png",
+      "SHA256": "FB44354991FF43D1D977AF4E03B92199DFC7B92D90D465DBA7DCD50F24ECFC8A"
+    },
+    {
+      "Path": "Assets\\Brand\\SystemShortcuts\\this-pc.png",
+      "SHA256": "9A5F2B51C3A929FADE3F2E20A3D9BED6D7AF38AF42DFAA73E90D402CBAE516F3"
+    },
+    {
+      "Path": "Assets\\Companion\\vellume-companion-complete.png",
+      "SHA256": "F6C86D481FBF7F96D462DDD3DDD65AED4EA9CF2A72FB485FB7DF5F46FF9688D8"
+    },
+    {
+      "Path": "Assets\\Companion\\vellume-companion-offline.png",
+      "SHA256": "F7522D47FE348994FF152BBEA0206556B0AB23B8F5209BF0AD11FB83D3E0F062"
+    },
+    {
+      "Path": "Assets\\Companion\\vellume-companion-thinking.png",
+      "SHA256": "4B4900BCEDFE1ECA7E2E60D9C025AF92FF4728B80251D1F1227509B926D41ADE"
+    },
+    {
+      "Path": "Assets\\Companion\\vellume-companion-working.png",
+      "SHA256": "E825E9B13A368593EA62865A776A9E039C4AF5C5716B2EFE2EC08CE83A1A54F7"
+    },
+    {
+      "Path": "Assets\\Companion\\vellume-companion.png",
+      "SHA256": "E2456A4AC0BFB5E0842ECD60052D3AFEC03E3DF00AAB693329308DD05DE12D03"
+    },
+    {
+      "Path": "Assets\\Launcher\\quick-slot-base-1024.png",
+      "SHA256": "1EF066F4AE8847EA4866C36EF05BCC74A60CFD3E5844C59D3E57EBC0D399A889"
+    },
+    {
+      "Path": "Assets\\Stickers\\01_Ena_Icon.png",
+      "SHA256": "7C7A2855A916C2ECF790064737D359785CC81EBBD689797E3129AB8ACF312354"
+    },
+    {
+      "Path": "Assets\\Stickers\\02_Ena_Sticker.png",
+      "SHA256": "7EF78232144D455841A98761D7D831A6C49DE71E893230831003836136A877EB"
+    },
+    {
+      "Path": "Assets\\Stickers\\03_Ena_Poster.png",
+      "SHA256": "5DBF5222971A5EB0C2C4AC9A2F2884AD218FB756873BC2B1D4EB86705A7934CA"
+    },
+    {
+      "Path": "Assets\\Stickers\\04_Ena_Band.png",
+      "SHA256": "6BD1F2F1DCB9F3BCD75C4CB831CB020522AEF00676CCFFCD68997CCD327EE818"
+    },
+    {
+      "Path": "Assets\\Stickers\\05_Anju_Icon.png",
+      "SHA256": "5F3CA1139AF0230CB86876079EFE792FB40B9E60FDFB23B02F94CE83320EE687"
+    },
+    {
+      "Path": "Assets\\Stickers\\06_Anju_Sticker.png",
+      "SHA256": "BB1529BC394D858899372B83753F34665E51B64A370A42B5E71F5E26EEA5C4E3"
+    },
+    {
+      "Path": "Assets\\Stickers\\07_Anju_Poster.png",
+      "SHA256": "02A82DFA18812FB7A375B298D57C21D5BC8F763AC99197929D637F951CE83177"
+    },
+    {
+      "Path": "Assets\\Stickers\\08_Anju_Band.png",
+      "SHA256": "DF0D80E7A414331312BEBBEDABFBC3D038AD5398483A7FBBF5D4C57A3D5760FB"
+    },
+    {
+      "Path": "Assets\\Stickers\\09_Tsukimi_Icon.png",
+      "SHA256": "BDEDA2A8B879D45BC65F2B860494975C8238268C099D94B3C30B241610FF321B"
+    },
+    {
+      "Path": "Assets\\Stickers\\10_Tsukimi_Sticker.png",
+      "SHA256": "9B61A0760E23B7D5E60EEB6704C4D6167F1DD2CF5D8F44D17CD424C6D895CED9"
+    },
+    {
+      "Path": "Assets\\Stickers\\11_Tsukimi_Poster.png",
+      "SHA256": "F0BD58EA54055E9B6A995011517636C16E20C9E8F32D1851DB34FC8FEF02F468"
+    },
+    {
+      "Path": "Assets\\Stickers\\12_Tsukimi_Band.png",
+      "SHA256": "B9DCF806D0D47D17F0A68424154E99FE15327ADEB099495649DEB7B1EACF9EBA"
+    },
+    {
+      "Path": "Assets\\Stickers\\13_Ririko_Icon.png",
+      "SHA256": "BA6409B7A0761EFD4BA45B63AD0C9D12A15A576B5CC3301BC015931F74E9FB38"
+    },
+    {
+      "Path": "Assets\\Stickers\\14_Ririko_Sticker.png",
+      "SHA256": "4F37277A6DBF8397B67805E98463978C704B815E7248BDE157F019D1F0CA85F6"
+    },
+    {
+      "Path": "Assets\\Stickers\\15_Ririko_Poster.png",
+      "SHA256": "D1ECADFF8C3A6337F7DB7A5DD5575AA99C1811C681FFB987B8F285DAC81700BA"
+    },
+    {
+      "Path": "Assets\\Stickers\\16_Ririko_Band.png",
+      "SHA256": "C14056B8B2DDD21598A38E982B5EEA1305E6B24CC9FC92D2A70F9B821179F15C"
+    },
+    {
+      "Path": "Assets\\Stickers\\17_Miku_Icon.png",
+      "SHA256": "752986F7C9D04F78ECC8155B67B99815066F0AF94AF2F57A2718F9D986D7BA57"
+    },
+    {
+      "Path": "Assets\\Stickers\\18_Miku_Sticker.png",
+      "SHA256": "C71FB8E7FA9849C84FB68080A4D0E31227CA44E84B3966F736A2D5215F23F484"
+    },
+    {
+      "Path": "Assets\\Stickers\\19_Miku_Poster.png",
+      "SHA256": "C92C2656A623741E7BAF90F4A3E500AAA8B64D6318BB1699FA7FF4202213DCC4"
+    },
+    {
+      "Path": "Assets\\Stickers\\20_Miku_Band.png",
+      "SHA256": "9C2060F5A9E3ED0212314AF0A78A2BDC14323578618020DE163832D6042BE6AB"
+    },
+    {
+      "Path": "Assets\\Stickers\\21_Nayuka_Icon.png",
+      "SHA256": "731589B4C602229B6C0DA7AAC0A36EE0BE33218B8C26D229C5BCA4C9444D5577"
+    },
+    {
+      "Path": "Assets\\Stickers\\22_Nayuka_Sticker.png",
+      "SHA256": "0FE51A9D4AFFB8800435ABFC8F7E71D5A12045376EE904358F9E88882C640C89"
+    },
+    {
+      "Path": "Assets\\Stickers\\23_Nayuka_Poster.png",
+      "SHA256": "94104F3E769E61170E9A88CB2B43D4F6D8C84C50E652C74F4A766B30183195C4"
+    },
+    {
+      "Path": "Assets\\Stickers\\24_Nayuka_Band.png",
+      "SHA256": "A26609FE05632467D9C5BCFAC5D2D0CB5A82A5C85D6A5F0DC5CD240F44AA4D0F"
+    },
+    {
+      "Path": "Assets\\Stickers\\25_LemonadeFactory_Common.png",
+      "SHA256": "D1C75C0D26BDEE1D9764B6FE2C61D704BF9AE409C7F3B1F1D25AFD1234C4D3EA"
+    },
+    {
+      "Path": "runtimes\\win-arm64\\native\\WebView2Loader.dll",
+      "SHA256": "EEF3EBA85D4C28EEBDDF966F016B1B43DF1EE584573210C5A6EB9483387467C4"
+    },
+    {
+      "Path": "runtimes\\win-x64\\native\\WebView2Loader.dll",
+      "SHA256": "239A9D6614A6CFADE62B47CDB0BE36E3069EEDC438C3E0647A9E7B7C84EF6EA0"
+    },
+    {
+      "Path": "runtimes\\win-x86\\native\\WebView2Loader.dll",
+      "SHA256": "5388B73B5CA00F1FAF2A569CD923FDFF00E316A254EF6DF9FBA240E3839A2C45"
+    }
+  ]
+}
