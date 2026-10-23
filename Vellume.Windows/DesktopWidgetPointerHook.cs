@@ -4,11 +4,11 @@ using System.Windows.Threading;
 
 namespace Vellume.Windows;
 
-/// <summary>Only handles widget right-clicks; never performs UI work on the mouse hook thread.</summary>
+/// <summary>Handles scoped desktop widget shortcuts; never performs UI work on the mouse hook thread.</summary>
 internal sealed class DesktopWidgetPointerHook : IDisposable
 {
     internal sealed record Target(int X, int Y, int Width, int Height, nint Editor,
-        Func<int, int, bool> HitTest, Action<bool> SetLocked)
+        Func<int, int, bool> HitTest, Action<bool> SetLocked, Action? Click = null)
     {
         internal bool Contains(int x, int y) => x >= X && y >= Y && x < X + Width && y < Y + Height;
     }
@@ -23,6 +23,10 @@ internal sealed class DesktopWidgetPointerHook : IDisposable
     private Exception? _failure;
     private nint _hook;
     private bool _suppressButtonUp;
+    private Target? _clickTarget;
+    private NativeMethods.Point _clickStart;
+    private bool _clickDragged;
+    private Action<int, int>? _primaryPressObserver;
     private volatile bool _disposed;
 
     internal DesktopWidgetPointerHook(Dispatcher ui)
@@ -44,6 +48,9 @@ internal sealed class DesktopWidgetPointerHook : IDisposable
         => Volatile.Write(ref _snapshot, new Snapshot(targets,
             desktopHandles.Select(GetRoot).Where(root => root != nint.Zero).Distinct().ToArray()));
 
+    internal void ObservePrimaryPress(Action<int, int>? observer)
+        => Volatile.Write(ref _primaryPressObserver, observer);
+
     // Shared by the actual hook and the regression tests. A covering app always
     // wins; a locked widget only responds to Alt on a visible, painted pixel.
     internal Target? FindTarget(int x, int y, bool alt, nint topWindow)
@@ -57,10 +64,41 @@ internal sealed class DesktopWidgetPointerHook : IDisposable
             : null;
     }
 
+    internal Target? FindClickTarget(int x, int y, nint topWindow)
+    {
+        var snapshot = Volatile.Read(ref _snapshot);
+        if (!snapshot.DesktopRoots.Contains(topWindow)) return null;
+        // The first painted widget owns the pixel, even when it has no click action.
+        var target = snapshot.Targets.FirstOrDefault(candidate => candidate.Contains(x, y) &&
+            candidate.HitTest(x - candidate.X, y - candidate.Y));
+        return target is { Editor: 0, Click: not null } ? target : null;
+    }
+
+    internal bool HandlePrimaryButton(bool down, int x, int y, nint topWindow)
+    {
+        if (down)
+        {
+            _clickTarget = FindClickTarget(x, y, topWindow);
+            _clickStart = new NativeMethods.Point { X = x, Y = y };
+            _clickDragged = false;
+            return _clickTarget is not null;
+        }
+        if (_clickTarget is not { } pressed) return false;
+        _clickTarget = null;
+        if (!_clickDragged && Math.Abs(x - _clickStart.X) <= 4 && Math.Abs(y - _clickStart.Y) <= 4 &&
+            ReferenceEquals(pressed, FindClickTarget(x, y, topWindow)) && !_ui.HasShutdownStarted)
+        {
+            try { _ui.BeginInvoke(DispatcherPriority.Input, new Action(() => { if (!_disposed) pressed.Click?.Invoke(); })); }
+            catch (InvalidOperationException) { }
+        }
+        return true;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
+        Volatile.Write(ref _primaryPressObserver, null);
         Volatile.Write(ref _snapshot, new Snapshot([], []));
         _hookDispatcher?.BeginInvokeShutdown(DispatcherPriority.Send);
         if (_thread != Thread.CurrentThread && _thread.Join(TimeSpan.FromSeconds(2))) _ready.Dispose();
@@ -84,6 +122,25 @@ internal sealed class DesktopWidgetPointerHook : IDisposable
     {
         if (code >= 0 && !_disposed)
         {
+            if (message == 0x0200 && _clickTarget is not null) // WM_MOUSEMOVE
+            {
+                var moved = Marshal.PtrToStructure<MouseData>(data).Point;
+                _clickDragged |= Math.Abs(moved.X - _clickStart.X) > 4 || Math.Abs(moved.Y - _clickStart.Y) > 4;
+            }
+            if (message == 0x0201 || (message == 0x0202 && _clickTarget is not null)) // left down/up
+            {
+                var point = Marshal.PtrToStructure<MouseData>(data).Point;
+                var observer = message == 0x0201 ? Volatile.Read(ref _primaryPressObserver) : null;
+                if (observer is not null && !_ui.HasShutdownStarted)
+                {
+                    try { _ui.BeginInvoke(DispatcherPriority.Input, new Action(() => { if (!_disposed) observer(point.X, point.Y); })); }
+                    catch (InvalidOperationException) { }
+                }
+                if ((_clickTarget is not null || Volatile.Read(ref _snapshot).Targets.Any(target =>
+                        target.Click is not null && target.Contains(point.X, point.Y))) &&
+                    HandlePrimaryButton(message == 0x0201, point.X, point.Y, FindTopWindow(point)))
+                    return new nint(1);
+            }
             if (message == 0x0205 && _suppressButtonUp) // WM_RBUTTONUP
             {
                 _suppressButtonUp = false;

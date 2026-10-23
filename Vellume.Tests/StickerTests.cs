@@ -157,7 +157,7 @@ public sealed class StickerTests
             Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
             var handles = renderer.PanelHandles.ToArray();
             Assert.Equal(2, handles.Length);
-            Assert.Equal(handles[1], NativeMethods.GetWindow(handles[0], NativeMethods.GwHwndNext));
+            AssertStickerStack(handles[0], handles[1]);
             Assert.True(NativeMethods.GetWindowRect(handles[0], out var firstBounds));
             Assert.Equal(162, firstBounds.Right - firstBounds.Left);
             Assert.Empty(renderer.StickerEditingHandles);
@@ -167,12 +167,25 @@ public sealed class StickerTests
             Assert.All(handles, handle => Assert.False(NativeMethods.IsWindow(handle)));
             var reordered = renderer.PanelHandles.ToArray();
             Assert.Equal(2, reordered.Length);
-            Assert.Equal(reordered[1], NativeMethods.GetWindow(reordered[0], NativeMethods.GwHwndNext));
+            AssertStickerStack(reordered[0], reordered[1]);
             Assert.True(NativeMethods.GetWindowRect(reordered[0], out var reorderedBounds));
             Assert.Equal(242, reorderedBounds.Right - reorderedBounds.Left);
             Assert.True(renderer.AllPanelsPresented);
             Assert.Empty(renderer.StickerEditingHandles);
         }));
+
+    private static void AssertStickerStack(nint front, nint back)
+    {
+        // Other integration tests and real apps may insert unrelated HWNDs
+        // between these windows. Only the two stickers' relative order matters.
+        var order = new List<nint>();
+        NativeMethods.EnumWindows((window, _) =>
+        {
+            if (window == front || window == back) order.Add(window);
+            return true;
+        }, nint.Zero);
+        Assert.Equal(new[] { front, back }, order);
+    }
 
     [Fact]
     [Trait("Category", "LocalIntegration")]
@@ -224,6 +237,21 @@ public sealed class StickerTests
                 Assert.Null(hook.FindTarget(10, 10, true, new nint(456))); // A covering application.
                 Assert.Same(top, hook.FindTarget(30, 30, false, top.Editor));
                 Assert.Null(hook.FindTarget(120, 120, true, top.Editor));
+                var clicked = false;
+                var companion = back with { Click = () => clicked = true };
+                hook.Update([top, companion], root);
+                Assert.Same(companion, hook.FindClickTarget(20, 20, root));
+                Assert.Null(hook.FindClickTarget(10, 10, root));
+                Assert.Null(hook.FindClickTarget(30, 30, root));
+                Assert.Null(hook.FindClickTarget(20, 20, new nint(456)));
+                Assert.True(hook.HandlePrimaryButton(true, 20, 20, root));
+                Assert.True(hook.HandlePrimaryButton(false, 26, 20, root)); // Dragging cannot open details.
+                System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
+                Assert.False(clicked);
+                Assert.True(hook.HandlePrimaryButton(true, 20, 20, root));
+                Assert.True(hook.HandlePrimaryButton(false, 20, 20, root));
+                System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
+                Assert.True(clicked);
                 hook.Update([]);
                 Assert.Null(hook.FindTarget(10, 10, true, root));
             }

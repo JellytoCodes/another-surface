@@ -12,7 +12,12 @@ internal sealed partial class NativeWidgetRendererWindow
         var initialScale = _settings.GetScale(state.Kind);
         state.Editor = new WidgetEditingOverlayWindow(state.Kind);
         state.Editor.DragPositionChanged += MoveWidget;
-        state.Editor.TransformStarted += () => initialScale = _settings.GetScale(state.Kind);
+        if (state.Kind == WidgetKind.CodexCompanion) state.Editor.Clicked += ToggleCodexDetails;
+        state.Editor.TransformStarted += () =>
+        {
+            initialScale = _settings.GetScale(state.Kind);
+            if (state.Kind == WidgetKind.CodexCompanion) CloseCodexDetails();
+        };
         state.Editor.TransformChanged += (factor, _, completed) => ResizeWidget(state.Kind, initialScale * factor, completed);
         state.Editor.SetBounds(_interactiveHostHandle, state.X, state.Y, state.Host.Width, state.Host.Height, _isWindowVisible);
     }
@@ -32,6 +37,7 @@ internal sealed partial class NativeWidgetRendererWindow
     internal void ResizeWidget(WidgetKind kind, double scale, bool completed)
     {
         if (_disposed || !_widgetHosts.TryGetValue(kind, out var state) || _settings.GetPlacement(kind).IsLocked) return;
+        if (kind == WidgetKind.CodexCompanion) CloseCodexDetails();
         _settings.SetScale(kind, scale);
         var target = kind switch
         {
@@ -100,7 +106,8 @@ internal sealed partial class NativeWidgetRendererWindow
         var targets = new List<DesktopWidgetPointerHook.Target>();
         foreach (var state in _widgetHosts.Values)
             targets.Add(new(state.X, state.Y, state.Host.Width, state.Host.Height,
-                state.Editor?.Handle ?? nint.Zero, state.Host.HitTest, locked => SetWidgetLocked(state.Kind, locked)));
+                state.Editor?.Handle ?? nint.Zero, state.Host.HitTest, locked => SetWidgetLocked(state.Kind, locked),
+                state.Kind == WidgetKind.CodexCompanion ? ToggleCodexDetails : null));
         foreach (var item in _settings.Stickers)
             if (_stickerHosts.TryGetValue(item.Id, out var state))
                 targets.Add(new(state.X, state.Y, state.Host.Width, state.Host.Height,

@@ -5,6 +5,21 @@ namespace Vellume.Tests;
 public sealed class CodexCompanionVisualStateTests
 {
     [Theory]
+    [InlineData("ready", "D:\\Dev\\Vellume", "대기 중 · Vellume")]
+    [InlineData("working", "D:\\Dev\\Vellume\\", "작업 중 · Vellume")]
+    [InlineData("thinking", "/work/project/", "생각 중 · project")]
+    [InlineData("complete", "", "작업 완료")]
+    [InlineData("disconnected", "D:\\Dev\\Vellume", "연결 안 됨")]
+    public void CompactSummary_ShowsActivityAndWorkspaceWithoutConnectionBoilerplate(
+        string state, string workspace, string expected)
+    {
+        var snapshot = new CodexCompanionSnapshot(state, "CODEX 연결됨", "", workspace, "",
+            DateTimeOffset.UtcNow, [], CodexUsageSnapshot.Unavailable());
+        Assert.Equal(expected, NativeWidgetRendererWindow.GetCodexSummary(snapshot,
+            NativeWidgetRendererWindow.ResolveCodexCompanionVisualState(snapshot)));
+    }
+
+    [Theory]
     [InlineData(
         "ready",
         "CODEX 연결됨",

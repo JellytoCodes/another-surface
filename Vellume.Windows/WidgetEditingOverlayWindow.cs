@@ -26,6 +26,7 @@ internal sealed class WidgetEditingOverlayWindow : Window
     private int _pixelWidth;
     private int _pixelHeight;
     private bool _dragging;
+    private bool _moved;
     private NativeMethods.Point _startCursor;
     private int _startX;
     private int _startY;
@@ -101,6 +102,7 @@ internal sealed class WidgetEditingOverlayWindow : Window
     internal event Action<int, int, bool>? PositionChanged;
     internal event Action? TransformStarted;
     internal event Action<double, double, bool>? TransformChanged;
+    internal event Action? Clicked;
 
     private void AddTransformHandle(Grid root, string text, string tooltip, int mode,
         System.Windows.HorizontalAlignment horizontal, VerticalAlignment vertical, System.Windows.Input.Cursor cursor)
@@ -210,6 +212,7 @@ internal sealed class WidgetEditingOverlayWindow : Window
         PositionChanged = null;
         TransformStarted = null;
         TransformChanged = null;
+        Clicked = null;
         Close();
     }
 
@@ -224,6 +227,7 @@ internal sealed class WidgetEditingOverlayWindow : Window
         _startY = _y;
         _requestedX = _x;
         _requestedY = _y;
+        _moved = false;
         _dragging = _frame.CaptureMouse();
         e.Handled = true;
     }
@@ -244,6 +248,8 @@ internal sealed class WidgetEditingOverlayWindow : Window
             _angle = (Math.Atan2(cursor.Y - _centerY, cursor.X - _centerX) - _startAngle) * 180 / Math.PI;
         else
         {
+            if (!_moved && Math.Abs(cursor.X - _startCursor.X) <= 4 && Math.Abs(cursor.Y - _startCursor.Y) <= 4) return;
+            _moved = true;
             _requestedX = _startX + cursor.X - _startCursor.X;
             _requestedY = _startY + cursor.Y - _startCursor.Y;
         }
@@ -259,7 +265,8 @@ internal sealed class WidgetEditingOverlayWindow : Window
         }
         _dragging = false;
         _frame.ReleaseMouseCapture();
-        RaiseChange(true);
+        if (_transformMode == 0 && !_moved) Clicked?.Invoke();
+        else RaiseChange(true);
         e.Handled = true;
     }
 
@@ -268,7 +275,7 @@ internal sealed class WidgetEditingOverlayWindow : Window
         if (_dragging)
         {
             _dragging = false;
-            RaiseChange(true);
+            if (_transformMode != 0 || _moved) RaiseChange(true);
         }
     }
 

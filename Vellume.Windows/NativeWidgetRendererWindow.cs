@@ -6,7 +6,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
@@ -19,7 +18,6 @@ using Image = System.Windows.Controls.Image;
 using Orientation = System.Windows.Controls.Orientation;
 using Path = System.IO.Path;
 using Point = System.Windows.Point;
-using ShapePath = System.Windows.Shapes.Path;
 using Size = System.Windows.Size;
 
 namespace Vellume.Windows;
@@ -98,9 +96,7 @@ internal sealed partial class NativeWidgetRendererWindow
     private StackPanel? _codexUsageLimits;
     private Ellipse? _codexPulse;
     private Image? _codexCharacter;
-    private TranslateTransform? _codexTranslate;
     private CodexCompanionVisualState? _lastCodexVisualState;
-    private string _lastCodexState = string.Empty;
     private string _lastCodexContentSignature = string.Empty;
 
     private SystemMetricsSnapshot? _lastMetrics;
@@ -116,6 +112,11 @@ internal sealed partial class NativeWidgetRendererWindow
             Interval = TimeSpan.FromSeconds(1)
         };
         _clockTimer.Tick += ClockTimerOnTick;
+        _codexNoticeTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(5)
+        };
+        _codexNoticeTimer.Tick += CodexNoticeTimerOnTick;
     }
 
     internal nint Handle =>
@@ -330,6 +331,7 @@ internal sealed partial class NativeWidgetRendererWindow
             return Task.CompletedTask;
         }
 
+        UpdateCodexCompletion(_lastCodex, codex);
         _lastCodex = codex;
         if (!_isPaused)
         {
@@ -342,7 +344,7 @@ internal sealed partial class NativeWidgetRendererWindow
     {
         _isPaused = true;
         _clockTimer.Stop();
-        StopCodexAnimation();
+        CloseCodexDetails();
         return Task.CompletedTask;
     }
 
@@ -364,6 +366,7 @@ internal sealed partial class NativeWidgetRendererWindow
         }
 
         _isWindowVisible = visible;
+        if (!visible) CloseCodexDetails();
         ApplyWindowVisibility();
     }
 
@@ -424,7 +427,9 @@ internal sealed partial class NativeWidgetRendererWindow
         _initialized = false;
         _clockTimer.Stop();
         _clockTimer.Tick -= ClockTimerOnTick;
-        StopCodexAnimation();
+        _codexNoticeTimer.Stop();
+        _codexNoticeTimer.Tick -= CodexNoticeTimerOnTick;
+        CloseCodexDetails();
         DisposeWidgetHosts();
         _clockRenderTarget = null;
         _systemRenderTarget = null;
@@ -452,6 +457,7 @@ internal sealed partial class NativeWidgetRendererWindow
 
     private void DisposeWidgetHosts()
     {
+        CloseCodexDetails();
         _pointerHook?.Update([]);
         DisposeStickerHosts();
         foreach (var state in _widgetHosts.Values)
@@ -572,6 +578,7 @@ internal sealed partial class NativeWidgetRendererWindow
         {
             return;
         }
+        if (kind == WidgetKind.CodexCompanion) CloseCodexDetails();
         // Choose the display under the widget centre. Native bounds are physical
         // pixels, including negative origins and displays with differing DPI.
         var centerX = requestedX + state.Host.Width / 2;
@@ -702,248 +709,6 @@ internal sealed partial class NativeWidgetRendererWindow
     {
         _systemInfoVisual = new SystemInfoVisual(_settings.SystemInfoAppearance with { Scale = 1 });
         return _systemInfoVisual;
-    }
-
-    private FrameworkElement CreateCodexPanel(WidgetSide side)
-    {
-        var canvas = new Canvas
-        {
-            Width = 520,
-            Height = 420
-        };
-        var statusLeft = side == WidgetSide.Left ? 225d : 0d;
-        var speechBubble = new ShapePath
-        {
-            Data = CreateCodexSpeechBubbleGeometry(
-                statusLeft,
-                18,
-                290,
-                394,
-                side),
-            Fill = CreateGradient(
-                true,
-                MikuPalette.WithAlpha(
-                    ReferenceDateBand,
-                    238),
-                MikuPalette.WithAlpha(
-                    ReferenceTimeBand,
-                    228)),
-            Stroke = new SolidColorBrush(
-                Color.FromArgb(215, 134, 236, 232)),
-            StrokeThickness = 1.5,
-            StrokeLineJoin = PenLineJoin.Round,
-            SnapsToDevicePixels = false
-        };
-        canvas.Children.Add(speechBubble);
-
-        var statusContent = new StackPanel
-        {
-            Width = 252
-        };
-        var headline = new StackPanel
-        {
-            Orientation = Orientation.Horizontal
-        };
-        _codexPulse = new Ellipse
-        {
-            Width = 9,
-            Height = 9,
-            Margin = new Thickness(0, 5, 9, 0),
-            Fill = new SolidColorBrush(
-                ReferenceCyan)
-        };
-        _codexHeadline = CreateText(
-            16,
-            FontWeights.Bold,
-            Colors.White);
-        headline.Children.Add(_codexPulse);
-        headline.Children.Add(_codexHeadline);
-        statusContent.Children.Add(headline);
-        statusContent.Children.Add(new Border
-        {
-            Height = 1,
-            Margin = new Thickness(0, 12, 0, 10),
-            Background = new SolidColorBrush(
-                Color.FromArgb(115, 255, 255, 255))
-        });
-        var projectLabel = CreateText(
-            11.5,
-            FontWeights.Bold,
-            Color.FromArgb(220, 255, 255, 255));
-        projectLabel.Text = "PROJECT · 최근 3개";
-        statusContent.Children.Add(projectLabel);
-        _codexProjects = new StackPanel
-        {
-            Margin = new Thickness(0, 7, 0, 0),
-            MaxHeight = 140
-        };
-        statusContent.Children.Add(_codexProjects);
-
-        var usageCard = new Border
-        {
-            Width = 252,
-            Height = 122,
-            Padding = new Thickness(11, 9, 11, 9),
-            CornerRadius = new CornerRadius(12),
-            Background = CreateGradient(
-                true,
-                MikuPalette.WithAlpha(
-                    ReferenceCyan,
-                    205),
-                MikuPalette.WithAlpha(
-                    ReferenceBlue,
-                    215)),
-            BorderBrush = new SolidColorBrush(
-                Color.FromArgb(175, 255, 255, 255)),
-            BorderThickness = new Thickness(1)
-        };
-        _codexUsageLimits = new StackPanel();
-        usageCard.Child = _codexUsageLimits;
-        Canvas.SetLeft(statusContent, statusLeft + 19);
-        Canvas.SetTop(statusContent, 34);
-        canvas.Children.Add(statusContent);
-        Canvas.SetLeft(usageCard, statusLeft + 19);
-        Canvas.SetTop(usageCard, 274);
-        canvas.Children.Add(usageCard);
-
-        var initialVisualState = ResolveCodexCompanionVisualState(
-            _lastCodex);
-        _codexCharacter = new Image
-        {
-            Width = 225,
-            Height = 255,
-            Stretch = Stretch.Uniform,
-            Source = GetCompanionImage(initialVisualState),
-            RenderTransformOrigin = new Point(0.5, 0.5),
-            SnapsToDevicePixels = false,
-            UseLayoutRounding = false
-        };
-        RenderOptions.SetBitmapScalingMode(
-            _codexCharacter,
-            BitmapScalingMode.HighQuality);
-        _lastCodexVisualState = initialVisualState;
-        _codexTranslate = new TranslateTransform();
-        var transforms = new TransformGroup();
-        if (side == WidgetSide.Left)
-        {
-            transforms.Children.Add(
-                new ScaleTransform(-1, 1));
-        }
-        transforms.Children.Add(_codexTranslate);
-        _codexCharacter.RenderTransform = transforms;
-        Canvas.SetLeft(
-            _codexCharacter,
-            side == WidgetSide.Left ? 0 : 295);
-        Canvas.SetTop(_codexCharacter, 18);
-        canvas.Children.Add(_codexCharacter);
-
-        UpdateCodexProjectRows();
-        UpdateCodexUsageRows();
-        return canvas;
-    }
-
-    private static Geometry CreateCodexSpeechBubbleGeometry(
-        double left,
-        double top,
-        double width,
-        double height,
-        WidgetSide side)
-    {
-        const double radius = 18;
-        const double tailHalfHeight = 14;
-        const double tailLength = 16;
-        var right = left + width;
-        var bottom = top + height;
-        var tailCenterY = top + 52;
-        var geometry = new StreamGeometry();
-        using (var context = geometry.Open())
-        {
-            context.BeginFigure(
-                new Point(left + radius, top),
-                isFilled: true,
-                isClosed: true);
-            context.LineTo(
-                new Point(right - radius, top),
-                isStroked: true,
-                isSmoothJoin: false);
-            context.ArcTo(
-                new Point(right, top + radius),
-                new Size(radius, radius),
-                rotationAngle: 0,
-                isLargeArc: false,
-                sweepDirection: SweepDirection.Clockwise,
-                isStroked: true,
-                isSmoothJoin: true);
-            if (side == WidgetSide.Right)
-            {
-                context.LineTo(
-                    new Point(right, tailCenterY - tailHalfHeight),
-                    true,
-                    false);
-                context.LineTo(
-                    new Point(right + tailLength, tailCenterY),
-                    true,
-                    true);
-                context.LineTo(
-                    new Point(right, tailCenterY + tailHalfHeight),
-                    true,
-                    true);
-            }
-            context.LineTo(
-                new Point(right, bottom - radius),
-                true,
-                false);
-            context.ArcTo(
-                new Point(right - radius, bottom),
-                new Size(radius, radius),
-                0,
-                false,
-                SweepDirection.Clockwise,
-                true,
-                true);
-            context.LineTo(
-                new Point(left + radius, bottom),
-                true,
-                false);
-            context.ArcTo(
-                new Point(left, bottom - radius),
-                new Size(radius, radius),
-                0,
-                false,
-                SweepDirection.Clockwise,
-                true,
-                true);
-            if (side == WidgetSide.Left)
-            {
-                context.LineTo(
-                    new Point(left, tailCenterY + tailHalfHeight),
-                    true,
-                    false);
-                context.LineTo(
-                    new Point(left - tailLength, tailCenterY),
-                    true,
-                    true);
-                context.LineTo(
-                    new Point(left, tailCenterY - tailHalfHeight),
-                    true,
-                    true);
-            }
-            context.LineTo(
-                new Point(left, top + radius),
-                true,
-                false);
-            context.ArcTo(
-                new Point(left + radius, top),
-                new Size(radius, radius),
-                0,
-                false,
-                SweepDirection.Clockwise,
-                true,
-                true);
-        }
-
-        geometry.Freeze();
-        return geometry;
     }
 
     private void UpdateCodexProjectRows()
@@ -1168,92 +933,6 @@ internal sealed partial class NativeWidgetRendererWindow
         RenderSystemPanel();
     }
 
-    private void ApplyLastCodex()
-    {
-        if (_codexHeadline is not null)
-        {
-            var usage = _lastCodex.Usage;
-            var visualState = ResolveCodexCompanionVisualState(
-                _lastCodex);
-            var visualChanged =
-                _lastCodexVisualState != visualState;
-            if (visualChanged && _codexCharacter is not null)
-            {
-                _codexCharacter.Source =
-                    GetCompanionImage(visualState);
-                _lastCodexVisualState = visualState;
-            }
-            var contentSignature = string.Join(
-                "|",
-                _lastCodex.State,
-                _lastCodex.Headline,
-                _lastCodex.Detail,
-                usage.IsAvailable,
-                string.Join(
-                    ";",
-                    usage.Limits
-                        .Take(2)
-                        .Select(limit =>
-                            $"{limit.Id}:{limit.DisplayName}:" +
-                            $"{limit.RemainingPercent}:" +
-                            $"{limit.ResetsAtUtc?.UtcTicks ?? 0}")),
-                string.Join(
-                    ";",
-                    _lastCodex.Projects
-                        .Take(3)
-                        .Select(project =>
-                            $"{project.Id}:{project.State}:" +
-                            $"{project.Title}:{project.Phase}:" +
-                            $"{project.Workspace}")));
-            var changed = visualChanged ||
-                          !string.Equals(
-                              _lastCodexContentSignature,
-                              contentSignature,
-                              StringComparison.Ordinal);
-            _codexHeadline.Text =
-                _lastCodex.State is "offline" or "disconnected"
-                    ? "CODEX 연결 안 됨"
-                    : "CODEX 연결됨";
-            var color = GetCodexStateColor(
-                _lastCodex.State);
-            _codexPulse!.Fill = new SolidColorBrush(color);
-            if (!string.Equals(
-                    _lastCodexState,
-                    _lastCodex.State,
-                    StringComparison.Ordinal))
-            {
-                _lastCodexState = _lastCodex.State;
-            }
-            if (changed)
-            {
-                _lastCodexContentSignature = contentSignature;
-                UpdateCodexProjectRows();
-                UpdateCodexUsageRows();
-                RenderCodexPanel();
-            }
-        }
-    }
-
-    private void StartCodexAnimation()
-    {
-        // The companion is a high-quality layered bitmap. Keeping it static
-        // avoids repeatedly resampling its transparent edges and wasting GPU.
-        RenderCodexPanel();
-    }
-
-    private void StopCodexAnimation()
-    {
-        if (_codexTranslate is null)
-        {
-            return;
-        }
-
-        _codexTranslate.BeginAnimation(
-            TranslateTransform.YProperty,
-            null);
-        _codexTranslate.Y = 0;
-    }
-
     private void AddPositioned(
         Canvas canvas,
         FrameworkElement element,
@@ -1364,7 +1043,7 @@ internal sealed partial class NativeWidgetRendererWindow
 
     private void ResetVisualReferences()
     {
-        StopCodexAnimation();
+        CloseCodexDetails();
         _systemInfoVisual = null;
         _simpleClock = null;
         _codexHeadline = null;
@@ -1372,9 +1051,7 @@ internal sealed partial class NativeWidgetRendererWindow
         _codexUsageLimits = null;
         _codexPulse = null;
         _codexCharacter = null;
-        _codexTranslate = null;
         _lastCodexVisualState = null;
-        _lastCodexState = string.Empty;
         _lastCodexContentSignature = string.Empty;
     }
 

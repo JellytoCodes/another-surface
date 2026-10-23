@@ -34,7 +34,7 @@
                                FontSize="22"
                                FontWeight="Bold"
                                Foreground="{StaticResource AccentBrush}"/>
-                    <TextBlock Text="라이브 데스크톱 · 0.9.0"
+                    <TextBlock Text="라이브 데스크톱 · 0.9.1"
                                Margin="0,4,0,0"
                                Foreground="{StaticResource MutedTextBrush}"
                                FontSize="12"/>
@@ -693,6 +693,8 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel>
                                     <TextBlock Text="Codex 상태 연결" FontWeight="SemiBold"/>
+                                    <TextBlock Text="작은 캐릭터에 작업 상태를 표시합니다. 좌클릭하면 프로젝트·사용량을 펼칩니다."
+                                               Margin="0,5,12,0" Foreground="{StaticResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap"/>
                                     <TextBlock x:Name="CodexBridgeStatusText" Text="자동 감지" Margin="0,5,12,0"
                                                Foreground="{StaticResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap"/>
                                 </StackPanel>
