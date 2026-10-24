@@ -109,10 +109,8 @@ public sealed class JsonSettingsStoreTests
                     ShowClock = false,
                     ShowSystemInfo = true,
                     ShowQuickSlots = true,
-                    ShowCodexCompanion = false,
                     ClockSide = WidgetSide.Left,
                     SystemInfoSide = WidgetSide.Right,
-                    CodexCompanionSide = WidgetSide.Right,
                     SnapQuickSlotsToGrid = true,
                     QuickSlotGridSize = 40,
                     SystemShortcuts =
@@ -246,7 +244,6 @@ public sealed class JsonSettingsStoreTests
             Assert.Equal(WallpaperKind.Video, restored.Library[0].Kind);
             Assert.False(restored.Widgets.ShowClock);
             Assert.True(restored.Widgets.ShowSystemInfo);
-            Assert.False(restored.Widgets.ShowCodexCompanion);
             var group = Assert.Single(
                 restored.Widgets.QuickSlotGroups);
             Assert.Equal("Development", group.Name);
@@ -257,9 +254,6 @@ public sealed class JsonSettingsStoreTests
             Assert.Equal(
                 WidgetSide.Right,
                 restored.Widgets.SystemInfoSide);
-            Assert.Equal(
-                WidgetSide.Left,
-                restored.Widgets.CodexCompanionSide);
             Assert.True(restored.Widgets.SnapQuickSlotsToGrid);
             Assert.Equal(40, restored.Widgets.QuickSlotGridSize);
             var slot = Assert.Single(restored.Widgets.QuickSlots);

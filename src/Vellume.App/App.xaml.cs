@@ -50,23 +50,6 @@ public partial class App : System.Windows.Application
         base.OnStartup(eventArgs);
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
-        if (eventArgs.Args.Contains(
-                "--install-codex-bridge",
-                StringComparer.OrdinalIgnoreCase))
-        {
-            try
-            {
-                await CodexCompanionBridgeMaintenance
-                    .InstallForCurrentUserAsync();
-                Shutdown();
-            }
-            catch
-            {
-                Shutdown(4);
-            }
-            return;
-        }
-
         if (isWallpaperRenderHost)
         {
             var pipeName = GetStringArgument(

@@ -102,7 +102,6 @@ internal sealed class WidgetEditingOverlayWindow : Window
     internal event Action<int, int, bool>? PositionChanged;
     internal event Action? TransformStarted;
     internal event Action<double, double, bool>? TransformChanged;
-    internal event Action? Clicked;
     internal event Action<bool>? MoveDragStateChanged;
     internal event Action? DeleteRequested;
 
@@ -226,7 +225,6 @@ internal sealed class WidgetEditingOverlayWindow : Window
         PositionChanged = null;
         TransformStarted = null;
         TransformChanged = null;
-        Clicked = null;
         MoveDragStateChanged = null;
         DeleteRequested = null;
         Close();
@@ -283,8 +281,7 @@ internal sealed class WidgetEditingOverlayWindow : Window
         _dragging = false;
         MoveDragStateChanged?.Invoke(false);
         _frame.ReleaseMouseCapture();
-        if (_transformMode == 0 && !_moved) Clicked?.Invoke();
-        else RaiseChange(true);
+        if (_transformMode != 0 || _moved) RaiseChange(true);
         e.Handled = true;
     }
 

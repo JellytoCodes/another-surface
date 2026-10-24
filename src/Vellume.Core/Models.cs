@@ -57,8 +57,7 @@ public enum ClockStyle
 public enum WidgetKind
 {
     Clock,
-    SystemInfo,
-    CodexCompanion
+    SystemInfo
 }
 
 public enum WidgetAnchor
@@ -456,22 +455,17 @@ public sealed class WidgetSettings
 {
     private WidgetPlacement? _clockPlacement;
     private WidgetPlacement? _systemInfoPlacement;
-    private WidgetPlacement? _codexPlacement;
 
     public bool IsEnabled { get; set; } = true;
     public bool ShowClock { get; set; } = true;
     public bool ShowSystemInfo { get; set; } = true;
     public bool ShowQuickSlots { get; set; }
-    public bool ShowCodexCompanion { get; set; } = true;
     public WidgetSide ClockSide { get; set; } = WidgetSide.Right;
     public WidgetSide SystemInfoSide { get; set; } = WidgetSide.Right;
-    // Legacy side properties remain readable for older settings. Explicit
-    // placements take precedence, and absent companion placement starts left.
-    public WidgetSide CodexCompanionSide { get; set; } = WidgetSide.Left;
+    // Legacy side properties remain readable for older settings. Explicit placements take precedence.
     public ClockStyle ClockStyle { get; set; } = ClockStyle.DigitalClean;
     public string ClockColor { get; set; } = "#FFFFFF";
     public double ClockScale { get; set; } = 1;
-    public double CodexScale { get; set; } = 1;
     public SystemInfoAppearance SystemInfoAppearance { get; set; } = new();
     // Front to back: the first sticker has the highest layer priority.
     public List<StickerItem> Stickers { get; set; } = [];
@@ -490,12 +484,6 @@ public sealed class WidgetSettings
                 ? WidgetAnchor.CenterLeft
                 : WidgetAnchor.CenterRight);
         set => _systemInfoPlacement = value;
-    }
-    public WidgetPlacement CodexPlacement
-    {
-        get => _codexPlacement ??=
-            WidgetPlacement.FromAnchor(WidgetAnchor.TopLeft);
-        set => _codexPlacement = value;
     }
     public bool SnapQuickSlotsToGrid { get; set; } = true;
     public int QuickSlotGridSize { get; set; } = 40;
@@ -592,20 +580,16 @@ public sealed class WidgetSettings
             ShowClock = ShowClock,
             ShowSystemInfo = ShowSystemInfo,
             ShowQuickSlots = ShowQuickSlots,
-            ShowCodexCompanion = ShowCodexCompanion,
             ClockSide = Enum.IsDefined(ClockSide) ? ClockSide : WidgetSide.Right,
             SystemInfoSide = Enum.IsDefined(SystemInfoSide) ? SystemInfoSide : WidgetSide.Right,
-            CodexCompanionSide = WidgetSide.Left,
             ClockStyle = Enum.IsDefined(ClockStyle)
                 ? ClockStyle
                 : ClockStyle.DigitalClean,
             ClockColor = NormalizeClockColor(ClockColor),
             ClockScale = NormalizeWidgetScale(ClockScale),
-            CodexScale = NormalizeWidgetScale(CodexScale),
             SystemInfoAppearance = (SystemInfoAppearance ?? new()).Copy(),
             ClockPlacement = ClockPlacement.Copy(WidgetAnchor.TopRight),
             SystemInfoPlacement = SystemInfoPlacement.Copy(WidgetAnchor.CenterRight),
-            CodexPlacement = CodexPlacement.Copy(WidgetAnchor.TopLeft),
             Stickers = (Stickers ?? []).OfType<StickerItem>()
                 .Where(item => !string.IsNullOrWhiteSpace(item.Id) && StickerCatalog.Find(item.AssetName) is not null)
                 .DistinctBy(item => item.Id, StringComparer.Ordinal)
@@ -632,7 +616,6 @@ public sealed class WidgetSettings
         {
             WidgetKind.Clock => ClockPlacement,
             WidgetKind.SystemInfo => SystemInfoPlacement,
-            WidgetKind.CodexCompanion => CodexPlacement,
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
 
@@ -642,7 +625,6 @@ public sealed class WidgetSettings
         {
             case WidgetKind.Clock: ShowClock = visible; break;
             case WidgetKind.SystemInfo: ShowSystemInfo = visible; break;
-            case WidgetKind.CodexCompanion: ShowCodexCompanion = visible; break;
         }
     }
 
@@ -650,7 +632,6 @@ public sealed class WidgetSettings
     {
         WidgetKind.Clock => ClockScale,
         WidgetKind.SystemInfo => SystemInfoAppearance.Scale,
-        WidgetKind.CodexCompanion => CodexScale,
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     });
 
@@ -661,7 +642,6 @@ public sealed class WidgetSettings
         {
             case WidgetKind.Clock: ClockScale = normalized; break;
             case WidgetKind.SystemInfo: SystemInfoAppearance.Scale = normalized; break;
-            case WidgetKind.CodexCompanion: CodexScale = normalized; break;
             default: throw new ArgumentOutOfRangeException(nameof(kind));
         }
     }
@@ -679,9 +659,6 @@ public sealed class WidgetSettings
                 break;
             case WidgetKind.SystemInfo:
                 SystemInfoPlacement = placement.Copy(WidgetAnchor.CenterRight);
-                break;
-            case WidgetKind.CodexCompanion:
-                CodexPlacement = placement.Copy(WidgetAnchor.TopLeft);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind));

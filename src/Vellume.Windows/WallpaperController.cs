@@ -24,7 +24,6 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 
 	private readonly DispatcherTimer _systemMetricsTimer;
 
-	private readonly DispatcherTimer _codexTimer;
 
 	private readonly DispatcherTimer _foregroundAppTimer;
 
@@ -36,17 +35,13 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 
 	private readonly SystemMetricsSampler _metricsSampler = new SystemMetricsSampler();
 
-	private readonly CodexCompanionStatusReader _codexCompanionStatusReader;
 
-	private readonly CodexCompanionPipeServer _codexCompanionPipeServer;
 
-	private readonly CodexCompanionBridgeInstaller _codexCompanionBridgeInstaller;
 
 	private readonly SemaphoreSlim _operationLock = new SemaphoreSlim(1, 1);
 
 	private readonly SemaphoreSlim _metricsRefreshLock = new SemaphoreSlim(1, 1);
 
-	private readonly SemaphoreSlim _codexRefreshLock = new SemaphoreSlim(1, 1);
 
 	private IWallpaperRenderer? _renderer;
 
@@ -64,11 +59,8 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 
 	private nint _hostHandle;
 
-	private CodexCompanionSnapshot _lastCodexSnapshot = CodexCompanionSnapshot.Disconnected();
 
-	private int _codexStatusDirty = 1;
 
-	private int _codexRefreshQueued;
 
 	private bool _manualPauseRequested;
 
@@ -118,11 +110,6 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 		string path = Path.GetDirectoryName(_renderDataDirectory) ?? _renderDataDirectory;
 		_gpuSafetyDirectory = Path.Combine(path, "GpuSafety");
 		_desktopWallpaperRecoveryPending = WindowsDesktopWallpaperLease.HasPendingRecovery(_gpuSafetyDirectory);
-		string text = Path.Combine(path, "Codex");
-		string statusPath = Path.Combine(text, "status.json");
-		_codexCompanionStatusReader = new CodexCompanionStatusReader(statusPath);
-		_codexCompanionPipeServer = new CodexCompanionPipeServer(statusPath, _logger);
-		_codexCompanionBridgeInstaller = new CodexCompanionBridgeInstaller(text, statusPath, "Vellume.Codex.Status.v1");
 		_reconnectTimer = new DispatcherTimer(DispatcherPriority.Background)
 		{
 			Interval = TimeSpan.FromSeconds(30.0)
@@ -133,18 +120,12 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 			Interval = TimeSpan.FromSeconds(1.0)
 		};
 		_systemMetricsTimer.Tick += SystemMetricsTimerOnTick;
-		_codexTimer = new DispatcherTimer(DispatcherPriority.Background)
-		{
-			Interval = TimeSpan.FromSeconds(30.0)
-		};
-		_codexTimer.Tick += CodexTimerOnTick;
 		_foregroundAppTimer = new DispatcherTimer(DispatcherPriority.Background)
 		{
 			Interval = TimeSpan.FromSeconds(10.0)
 		};
 		_foregroundAppTimer.Tick += ForegroundAppTimerOnTick;
 		_systemEventMonitor.DesktopShellChanged += SystemEventMonitor_DesktopShellChanged;
-		_codexCompanionStatusReader.Changed += CodexCompanionStatusReader_Changed;
 	}
 
 	public async Task ApplyAsync(WallpaperItem wallpaper, DisplayInfo display, PlaybackOptions options, WidgetSettings widgets, CancellationToken cancellationToken = default(CancellationToken))
@@ -543,12 +524,6 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 		}
 	}
 
-	public Task<string> InstallCodexCompanionBridgeAsync(CancellationToken cancellationToken = default(CancellationToken))
-	{
-		_codexCompanionPipeServer.Start();
-		return _codexCompanionBridgeInstaller.InstallAsync(cancellationToken);
-	}
-
 	public async Task CompleteDesktopWallpaperHandoffAsync(CancellationToken cancellationToken = default(CancellationToken))
 	{
 		await _operationLock.WaitAsync(cancellationToken);
@@ -589,20 +564,14 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 		_foregroundEventDebounce?.Dispose();
 		_foregroundEventDebounce = null;
 		_systemEventMonitor.DesktopShellChanged -= SystemEventMonitor_DesktopShellChanged;
-		_codexCompanionStatusReader.Changed -= CodexCompanionStatusReader_Changed;
 		_reconnectTimer.Stop();
 		_reconnectTimer.Tick -= ReconnectTimerOnTick;
 		_systemMetricsTimer.Stop();
 		_systemMetricsTimer.Tick -= SystemMetricsTimerOnTick;
-		_codexTimer.Stop();
-		_codexTimer.Tick -= CodexTimerOnTick;
 		_foregroundAppTimer.Stop();
 		_foregroundAppTimer.Tick -= ForegroundAppTimerOnTick;
-		await _codexCompanionPipeServer.DisposeAsync();
-		_codexCompanionStatusReader.Dispose();
 		await _operationLock.WaitAsync();
 		await _metricsRefreshLock.WaitAsync();
-		await _codexRefreshLock.WaitAsync();
 		try
 		{
 			await CloseWallpaperCoreAsync();
@@ -612,10 +581,8 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 		finally
 		{
 			_metricsSampler.Dispose();
-			_codexRefreshLock.Release();
 			_metricsRefreshLock.Release();
 			_operationLock.Release();
-			_codexRefreshLock.Dispose();
 			_metricsRefreshLock.Dispose();
 			_operationLock.Dispose();
 		}
@@ -656,15 +623,6 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 				{
 					_metricsRefreshLock.Release();
 				}
-			}
-			await _codexRefreshLock.WaitAsync(cancellationToken);
-			try
-			{
-				await UpdateCodexCoreAsync(settings, cancellationToken);
-			}
-			finally
-			{
-				_codexRefreshLock.Release();
 			}
 			if (IsRenderingPaused)
 			{
@@ -729,7 +687,6 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 	private async Task CloseWidgetCoreAsync(bool clearDisplay)
 	{
 		_systemMetricsTimer.Stop();
-		_codexTimer.Stop();
 		NativeWidgetRendererWindow? widgetRenderer = _widgetRenderer;
 		_widgetRenderer = null;
 		if (clearDisplay)
@@ -847,89 +804,6 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 		finally
 		{
 			_metricsRefreshLock.Release();
-		}
-	}
-
-	private async void CodexTimerOnTick(object? sender, EventArgs eventArgs)
-	{
-		if (_disposed || _widgetRenderer == null ||
-			!_widgetSettings.IsEnabled ||
-			!_widgetSettings.ShowCodexCompanion ||
-			!await _codexRefreshLock.WaitAsync(0))
-		{
-			return;
-		}
-		try
-		{
-			await UpdateCodexCoreAsync(_widgetSettings.Copy(), CancellationToken.None);
-		}
-		catch (Exception exception)
-		{
-			await _logger.ErrorAsync("Codex companion status update failed.", exception);
-		}
-		finally
-		{
-			_codexRefreshLock.Release();
-		}
-	}
-
-	private void CodexCompanionStatusReader_Changed(object? sender, EventArgs eventArgs)
-	{
-		QueueCodexRefresh();
-	}
-
-	private void QueueCodexRefresh()
-	{
-		if (_disposed)
-		{
-			return;
-		}
-		Interlocked.Exchange(ref _codexStatusDirty, 1);
-		if (Interlocked.Exchange(ref _codexRefreshQueued, 1) == 0)
-		{
-			_dispatcher.BeginInvoke(DispatcherPriority.Background, (Action)delegate
-			{
-				_ = RefreshCodexFromEventsAsync();
-			});
-		}
-	}
-
-	private async Task RefreshCodexFromEventsAsync()
-	{
-		try
-		{
-			Interlocked.Exchange(ref _codexStatusDirty, 0);
-			if (_disposed || IsRenderingPaused || _widgetRenderer == null || !_widgetSettings.IsEnabled || !_widgetSettings.ShowCodexCompanion)
-			{
-				return;
-			}
-			await _codexRefreshLock.WaitAsync();
-			try
-			{
-				if (!_disposed)
-				{
-					await UpdateCodexCoreAsync(_widgetSettings.Copy(), CancellationToken.None);
-				}
-			}
-			finally
-			{
-				_codexRefreshLock.Release();
-			}
-		}
-		catch (ObjectDisposedException) when (_disposed)
-		{
-		}
-		catch (Exception exception)
-		{
-			await _logger.ErrorAsync("이벤트 기반 Codex 컴패니언 갱신에 실패했습니다.", exception);
-		}
-		finally
-		{
-			Interlocked.Exchange(ref _codexRefreshQueued, 0);
-			if (!_disposed && Volatile.Read(ref _codexStatusDirty) != 0)
-			{
-				QueueCodexRefresh();
-			}
 		}
 	}
 
@@ -1126,21 +1000,6 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 		return string.Empty;
 	}
 
-	private async Task UpdateCodexCoreAsync(WidgetSettings settings, CancellationToken cancellationToken)
-	{
-		NativeWidgetRendererWindow? renderer = _widgetRenderer;
-		if (renderer == null)
-		{
-			return;
-		}
-		if (settings.ShowCodexCompanion)
-		{
-			_codexCompanionPipeServer.Start();
-			_lastCodexSnapshot = await _codexCompanionStatusReader.ReadAsync(cancellationToken);
-			await renderer.UpdateCodexAsync(_lastCodexSnapshot);
-		}
-	}
-
 	private void UpdateTimers()
 	{
 		if (_renderer != null || _widgetRenderer != null)
@@ -1159,20 +1018,6 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 		else
 		{
 			_systemMetricsTimer.Stop();
-		}
-		bool num = !IsRenderingPaused && _widgetRenderer != null && _widgetSettings.IsEnabled && _widgetSettings.ShowCodexCompanion;
-		bool isEnabled = _codexTimer.IsEnabled;
-		if (num)
-		{
-			_codexTimer.Start();
-			if (!isEnabled)
-			{
-				QueueCodexRefresh();
-			}
-		}
-		else
-		{
-			_codexTimer.Stop();
 		}
 		if (_renderer != null)
 		{
@@ -1203,7 +1048,7 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 		{
 			if (!settings.ShowClock && !settings.ShowSystemInfo)
 			{
-				return settings.ShowCodexCompanion || settings.Stickers.Any(item => item.IsVisible);
+				return settings.Stickers.Any(item => item.IsVisible);
 			}
 			return true;
 		}

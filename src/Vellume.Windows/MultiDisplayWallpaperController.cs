@@ -415,11 +415,6 @@ public sealed class MultiDisplayWallpaperController :
             cancellationToken);
     }
 
-    public Task<string> InstallCodexCompanionBridgeAsync(
-        CancellationToken cancellationToken = default)
-        => _primaryController.InstallCodexCompanionBridgeAsync(
-            cancellationToken);
-
     public Task CompleteDesktopWallpaperHandoffAsync(
         CancellationToken cancellationToken = default)
         => _primaryController.CompleteDesktopWallpaperHandoffAsync(

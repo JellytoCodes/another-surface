@@ -201,12 +201,6 @@ public sealed class WindowsDockRuntimeServiceTests
             WindowsDockRuntimeService.TruncateWindowTitle(
                 "짧은 제목",
                 24));
-        var projectTitle =
-            NativeWidgetRendererWindow.TruncateWithEllipsis(
-                "Project_MuseumHeist_매우_긴_프로젝트_이름",
-                30);
-        Assert.Equal(30, projectTitle.Length);
-        Assert.EndsWith("…", projectTitle);
     }
 
     [Fact]

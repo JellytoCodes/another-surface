@@ -266,8 +266,6 @@ public partial class MainWindow : Window
             WidgetsEnabledCheckBox.IsChecked = _settings.Widgets.IsEnabled;
             ClockWidgetCheckBox.IsChecked = _settings.Widgets.ShowClock;
             SystemWidgetCheckBox.IsChecked = _settings.Widgets.ShowSystemInfo;
-            CodexCompanionWidgetCheckBox.IsChecked =
-                _settings.Widgets.ShowCodexCompanion;
             DockEnabledCheckBox.IsChecked = _settings.Dock.IsEnabled;
             DockRunningAppsCheckBox.IsChecked =
                 _settings.Dock.ShowRunningApplications;
@@ -2149,8 +2147,7 @@ public partial class MainWindow : Window
         RoutedEventArgs eventArgs)
     {
         WidgetKind? changedKind = ReferenceEquals(sender, ClockWidgetCheckBox) ? WidgetKind.Clock :
-            ReferenceEquals(sender, SystemWidgetCheckBox) ? WidgetKind.SystemInfo :
-            ReferenceEquals(sender, CodexCompanionWidgetCheckBox) ? WidgetKind.CodexCompanion : null;
+            ReferenceEquals(sender, SystemWidgetCheckBox) ? WidgetKind.SystemInfo : null;
         await CommitWidgetControlChangeAsync(() =>
         {
             _settings.Widgets.IsEnabled =
@@ -2160,8 +2157,6 @@ public partial class MainWindow : Window
             _settings.Widgets.ShowSystemInfo =
                 SystemWidgetCheckBox.IsChecked == true;
             _settings.Widgets.ShowQuickSlots = false;
-            _settings.Widgets.ShowCodexCompanion =
-                CodexCompanionWidgetCheckBox.IsChecked == true;
         }, changedKind);
     }
 
@@ -2239,29 +2234,6 @@ public partial class MainWindow : Window
 
         await SaveAndRefreshWidgetsAsync();
     }
-
-    private async void InstallCodexBridgeButton_Click(
-        object sender,
-        RoutedEventArgs eventArgs)
-    {
-        try
-        {
-            var hooksPath =
-                await _wallpaperController
-                    .InstallCodexCompanionBridgeAsync();
-            CodexBridgeStatusText.Text =
-                $"자동 감지는 이미 활성화되어 있습니다. 상세 상태 연결을 " +
-                $"{hooksPath}에 설치했습니다. Codex를 다시 시작한 뒤 " +
-                "/hooks에서 Vellume 훅을 한 번 신뢰하세요.";
-        }
-        catch (Exception exception)
-        {
-            await ReportErrorAsync(
-                "Codex 컴패니언 연결을 설치하지 못했습니다.",
-                exception);
-        }
-    }
-
 
     private void SortQuickSlots()
     {

@@ -462,7 +462,6 @@
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="42"/>
                                         <RowDefinition Height="42"/>
-                                        <RowDefinition Height="42"/>
                                     </Grid.RowDefinitions>
                                     <TextBlock Grid.Column="1" Text="위치" Foreground="{StaticResource MutedTextBrush}" FontSize="11"/>
                                     <TextBlock Grid.Column="3" Text="디스플레이" Foreground="{StaticResource MutedTextBrush}" FontSize="11"/>
@@ -481,14 +480,6 @@
                                     <ComboBox x:Name="SystemDisplayComboBox" Grid.Row="2" Grid.Column="3" Tag="SystemInfo" VerticalAlignment="Center"
                                               SelectionChanged="WidgetDisplay_Changed"/>
                                     <CheckBox x:Name="SystemLockCheckBox" Grid.Row="2" Grid.Column="4" Content="Lock" Tag="SystemInfo" Margin="12,0,0,0" VerticalAlignment="Center"
-                                              Checked="WidgetLock_Changed" Unchecked="WidgetLock_Changed"/>
-                                    <CheckBox x:Name="CodexCompanionWidgetCheckBox" Grid.Row="3" Content="컴패니언" VerticalAlignment="Center"
-                                              Checked="WidgetCheckBox_Changed" Unchecked="WidgetCheckBox_Changed"/>
-                                    <ComboBox x:Name="CodexAnchorComboBox" Grid.Row="3" Grid.Column="1" Tag="CodexCompanion" VerticalAlignment="Center"
-                                              SelectionChanged="WidgetAnchor_Changed"/>
-                                    <ComboBox x:Name="CodexDisplayComboBox" Grid.Row="3" Grid.Column="3" Tag="CodexCompanion" VerticalAlignment="Center"
-                                              SelectionChanged="WidgetDisplay_Changed"/>
-                                    <CheckBox x:Name="CodexLockCheckBox" Grid.Row="3" Grid.Column="4" Content="Lock" Tag="CodexCompanion" Margin="12,0,0,0" VerticalAlignment="Center"
                                               Checked="WidgetLock_Changed" Unchecked="WidgetLock_Changed"/>
                                 </Grid>
                                 <TextBlock Text="드래그로 이동 · 잡은 채 Delete로 미표시 · ↘ 크기 조절 · 우클릭 Lock · Alt+우클릭 Unlock"
@@ -683,21 +674,6 @@
                                 </ListBox>
                             </StackPanel>
                         </Border>
-
-                        <Border Margin="0,16,0,0" Padding="18" Background="{StaticResource SurfaceBrush}" CornerRadius="12">
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Text="Codex 상태 연결" FontWeight="SemiBold"/>
-                                    <TextBlock Text="작은 캐릭터에 작업 상태를 표시합니다. 좌클릭하면 프로젝트·사용량을 펼칩니다."
-                                               Margin="0,5,12,0" Foreground="{StaticResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap"/>
-                                    <TextBlock x:Name="CodexBridgeStatusText" Text="자동 감지" Margin="0,5,12,0"
-                                               Foreground="{StaticResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap"/>
-                                </StackPanel>
-                                <Button Grid.Column="1" Content="상세 상태 연결" Click="InstallCodexBridgeButton_Click" VerticalAlignment="Center"/>
-                            </Grid>
-                        </Border>
-
                     </StackPanel>
                 </ScrollViewer>
             </Grid>

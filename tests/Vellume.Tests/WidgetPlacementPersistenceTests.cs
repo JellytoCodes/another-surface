@@ -4,6 +4,43 @@ namespace Vellume.Tests;
 
 public sealed class WidgetPlacementPersistenceTests
 {
+    [Fact]
+    public async Task LoadAndSave_IgnoresRemovedWidgetFieldsAndKeepsExistingSettings()
+    {
+        await WithStoreAsync(async (store, path) =>
+        {
+            await File.WriteAllTextAsync(path,
+                """
+                {
+                  "SchemaVersion": 19,
+                  "Widgets": {
+                    "ShowCodexCompanion": true,
+                    "CodexCompanionSide": "Left",
+                    "CodexScale": 1.3,
+                    "CodexPlacement": { "Anchor": "Custom", "X": 0.9, "Y": 0.2 },
+                    "ClockColor": "#89E0D5",
+                    "ClockScale": 1.137,
+                    "ClockPlacement": { "Anchor": "Custom", "X": 0.31, "Y": 0.72, "IsLocked": false },
+                    "SystemInfoAppearance": { "Scale": 1.173 }
+                  },
+                  "Dock": { "IsEnabled": false, "IconSize": 54 }
+                }
+                """);
+            var settings = await store.LoadAsync();
+            Assert.Equal("#89E0D5", settings.Widgets.ClockColor);
+            Assert.Equal(1.137, settings.Widgets.ClockScale);
+            Assert.Equal(0.31, settings.Widgets.ClockPlacement.X);
+            Assert.Equal(0.72, settings.Widgets.ClockPlacement.Y);
+            Assert.False(settings.Widgets.ClockPlacement.IsLocked);
+            Assert.Equal(1.173, settings.Widgets.SystemInfoAppearance.Scale);
+            Assert.False(settings.Dock.IsEnabled);
+            Assert.Equal(54, settings.Dock.IconSize);
+            Assert.Equal(new[] { WidgetKind.Clock, WidgetKind.SystemInfo }, Enum.GetValues<WidgetKind>());
+            await store.SaveAsync(settings);
+            Assert.DoesNotContain("Codex", await File.ReadAllTextAsync(path));
+        });
+    }
+
     [Theory]
     [InlineData(ClockStyle.AnalogMinimal)]
     [InlineData(ClockStyle.AnalogNumerals)]
@@ -22,7 +59,6 @@ public sealed class WidgetPlacementPersistenceTests
                     ClockStyle = style,
                     ClockColor = "#89E0D5",
                     ClockScale = 1.137,
-                    CodexScale = 0.863,
                     SystemInfoAppearance = new SystemInfoAppearance { Scale = 1.173 },
                     ClockPlacement = new WidgetPlacement
                     {
@@ -34,8 +70,6 @@ public sealed class WidgetPlacementPersistenceTests
                     },
                     SystemInfoPlacement = WidgetPlacement.FromAnchor(
                         WidgetAnchor.BottomCenter),
-                    CodexPlacement = WidgetPlacement.FromAnchor(
-                        WidgetAnchor.CenterRight, isLocked: false)
                 }
             });
 
@@ -45,7 +79,6 @@ public sealed class WidgetPlacementPersistenceTests
             Assert.Equal(style, restored.Widgets.ClockStyle);
             Assert.Equal("#89E0D5", restored.Widgets.ClockColor);
             Assert.Equal(1.137, restored.Widgets.ClockScale);
-            Assert.Equal(0.863, restored.Widgets.CodexScale);
             Assert.Equal(1.173, restored.Widgets.SystemInfoAppearance.Scale);
             Assert.Equal(WidgetAnchor.Custom, restored.Widgets.ClockPlacement.Anchor);
             Assert.Equal(0.31, restored.Widgets.ClockPlacement.X);
@@ -54,8 +87,6 @@ public sealed class WidgetPlacementPersistenceTests
             Assert.Equal("DISPLAY2", restored.Widgets.ClockPlacement.DisplayId);
             Assert.Equal(WidgetAnchor.BottomCenter, restored.Widgets.SystemInfoPlacement.Anchor);
             Assert.True(restored.Widgets.SystemInfoPlacement.IsLocked);
-            Assert.Equal(WidgetAnchor.CenterRight, restored.Widgets.CodexPlacement.Anchor);
-            Assert.False(restored.Widgets.CodexPlacement.IsLocked);
             Assert.Contains($"\"ClockStyle\": \"{style}\"", await File.ReadAllTextAsync(path));
         });
     }
@@ -83,8 +114,6 @@ public sealed class WidgetPlacementPersistenceTests
             Assert.Equal(ClockStyle.DigitalClean, restored.Widgets.ClockStyle);
             Assert.Equal(WidgetAnchor.TopLeft, restored.Widgets.ClockPlacement.Anchor);
             Assert.Equal(WidgetAnchor.CenterLeft, restored.Widgets.SystemInfoPlacement.Anchor);
-            Assert.Equal(WidgetAnchor.TopLeft, restored.Widgets.CodexPlacement.Anchor);
-            Assert.Equal(WidgetSide.Left, restored.Widgets.CodexCompanionSide);
             Assert.True(restored.Widgets.ClockPlacement.IsLocked);
             await store.SaveAsync(restored);
             var reloaded = await store.LoadAsync();
@@ -116,9 +145,6 @@ public sealed class WidgetPlacementPersistenceTests
             Assert.Equal(WidgetAnchor.Center, restored.Widgets.ClockPlacement.Anchor);
             Assert.False(restored.Widgets.ClockPlacement.IsLocked);
             Assert.Equal(WidgetAnchor.BottomRight, restored.Widgets.SystemInfoPlacement.Anchor);
-            Assert.Equal(WidgetAnchor.Custom, restored.Widgets.CodexPlacement.Anchor);
-            Assert.Equal(0.9, restored.Widgets.CodexPlacement.X);
-            Assert.Equal(0.2, restored.Widgets.CodexPlacement.Y);
         });
     }
 
@@ -154,7 +180,6 @@ public sealed class WidgetPlacementPersistenceTests
             Assert.Equal(0, restored.Widgets.SystemInfoPlacement.X);
             Assert.Equal(1, restored.Widgets.SystemInfoPlacement.Y);
             Assert.Equal("DISPLAY2", restored.Widgets.SystemInfoPlacement.DisplayId);
-            Assert.Equal(WidgetAnchor.TopLeft, restored.Widgets.CodexPlacement.Anchor);
         });
     }
 

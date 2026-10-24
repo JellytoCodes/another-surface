@@ -237,21 +237,6 @@ public sealed class StickerTests
                 Assert.Null(hook.FindTarget(10, 10, true, new nint(456))); // A covering application.
                 Assert.Same(top, hook.FindTarget(30, 30, false, top.Editor));
                 Assert.Null(hook.FindTarget(120, 120, true, top.Editor));
-                var clicked = false;
-                var companion = back with { Click = () => clicked = true };
-                hook.Update([top, companion], root);
-                Assert.Same(companion, hook.FindClickTarget(20, 20, root));
-                Assert.Null(hook.FindClickTarget(10, 10, root));
-                Assert.Null(hook.FindClickTarget(30, 30, root));
-                Assert.Null(hook.FindClickTarget(20, 20, new nint(456)));
-                Assert.True(hook.HandlePrimaryButton(true, 20, 20, root));
-                Assert.True(hook.HandlePrimaryButton(false, 26, 20, root)); // Dragging cannot open details.
-                System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
-                Assert.False(clicked);
-                Assert.True(hook.HandlePrimaryButton(true, 20, 20, root));
-                Assert.True(hook.HandlePrimaryButton(false, 20, 20, root));
-                System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
-                Assert.True(clicked);
                 hook.Update([]);
                 Assert.Null(hook.FindTarget(10, 10, true, root));
             }
@@ -314,7 +299,7 @@ public sealed class StickerTests
         });
 
     private static WidgetSettings EmptyWidgets() => new()
-        { ShowClock = false, ShowSystemInfo = false, ShowCodexCompanion = false };
+        { ShowClock = false, ShowSystemInfo = false, };
 
     private static void WithRenderer(Action<NativeWidgetRendererWindow, DisplayInfo> action)
     {

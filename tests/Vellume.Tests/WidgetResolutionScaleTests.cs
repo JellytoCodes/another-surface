@@ -58,7 +58,6 @@ public sealed class WidgetResolutionScaleTests
                         IsEnabled = true,
                         ShowClock = true,
                         ShowSystemInfo = true,
-                        ShowCodexCompanion = true,
                         ClockSide = WidgetSide.Right,
                         SystemInfoSide = WidgetSide.Right
                     })
@@ -84,7 +83,7 @@ public sealed class WidgetResolutionScaleTests
                         .GetAwaiter().GetResult();
                     Assert.True(renderer.IsReady);
                     Assert.True(renderer.IsAttachedTo(parent));
-                    Assert.Equal(3, renderer.PanelHandles.Count);
+                    Assert.Equal(2, renderer.PanelHandles.Count);
                     Assert.True(renderer.AllPanelsPresented);
                     Assert.All(renderer.PanelHandles, handle =>
                         Assert.False(NativeMethods.IsWindowVisible(handle)));
@@ -102,10 +101,6 @@ public sealed class WidgetResolutionScaleTests
                     AssertScaled(display.X + display.Width - bounds[1].Right, 24, resolution.Scale, tolerance);
                     Assert.InRange(Math.Abs(bounds[1].Top - display.Y -
                         (display.Height - (bounds[1].Bottom - bounds[1].Top)) / 2d), 0, 1);
-                    AssertScaled(bounds[2].Right - bounds[2].Left, 180, resolution.Scale, tolerance);
-                    AssertScaled(bounds[2].Bottom - bounds[2].Top, 148, resolution.Scale, tolerance);
-                    AssertScaled(bounds[2].Left - display.X, 24, resolution.Scale, tolerance);
-                    AssertScaled(bounds[2].Top - display.Y, 24, resolution.Scale, tolerance);
                     foreach (var panel in bounds) AssertInsideDisplay(panel, display);
                     AssertTransparentFrames(renderer, bounds);
 
@@ -121,12 +116,6 @@ public sealed class WidgetResolutionScaleTests
                             DriveMetricsSnapshot.Unavailable("D"),
                             TimeSpan.FromHours(1)))
                         .GetAwaiter().GetResult();
-                    renderer.UpdateCodexAsync(
-                            CodexCompanionSnapshot.Disconnected() with
-                            {
-                                Headline = $"해상도 검증 {index}"
-                            })
-                        .GetAwaiter().GetResult();
                     // Updated information panels must retain their HWND and bounds;
                     // the clock can reuse its frame within the same displayed second.
                     Assert.True(renderer.AllPanelsPresented);
@@ -134,7 +123,6 @@ public sealed class WidgetResolutionScaleTests
                         generations,
                         (current, previous) => current >= previous), Assert.True);
                     Assert.True(renderer.PanelPresentationGenerations[1] > generations[1]);
-                    Assert.True(renderer.PanelPresentationGenerations[2] > generations[2]);
                     Assert.Equal(bounds, renderer.PanelHandles
                         .Select(ReadPhysicalBounds).ToArray());
                     AssertTransparentFrames(renderer, bounds);
@@ -167,7 +155,6 @@ public sealed class WidgetResolutionScaleTests
                         IsEnabled = true,
                         ShowClock = false,
                         ShowSystemInfo = true,
-                        ShowCodexCompanion = false,
                         SystemInfoSide = WidgetSide.Right
                     })
                     .GetAwaiter().GetResult();
@@ -211,7 +198,7 @@ public sealed class WidgetResolutionScaleTests
             renderer.SetWindowVisible(false);
             try
             {
-                var settings = new WidgetSettings { ShowClock = false, ShowCodexCompanion = false };
+                var settings = new WidgetSettings { ShowClock = false, };
                 Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
                 var display = CreateDisplay(1920, 1080);
                 renderer.AttachTo(parent, display);
@@ -237,10 +224,8 @@ public sealed class WidgetResolutionScaleTests
     [Theory]
     [InlineData(WidgetKind.Clock, 1920, 1080)]
     [InlineData(WidgetKind.SystemInfo, 1920, 1080)]
-    [InlineData(WidgetKind.CodexCompanion, 1920, 1080)]
     [InlineData(WidgetKind.Clock, 3840, 2160)]
     [InlineData(WidgetKind.SystemInfo, 3840, 2160)]
-    [InlineData(WidgetKind.CodexCompanion, 3840, 2160)]
     [Trait("Category", "LocalIntegration")]
     public void FreeResize_CommitsContinuousScaleOnRelease_AndLockCanBeReversed(WidgetKind kind, int width, int height)
         => RunOnStaThread(() => RunWithOffscreenParent(parent =>
@@ -249,7 +234,7 @@ public sealed class WidgetResolutionScaleTests
             try
             {
                 var settings = new WidgetSettings { ShowClock = kind == WidgetKind.Clock,
-                    ShowSystemInfo = kind == WidgetKind.SystemInfo, ShowCodexCompanion = kind == WidgetKind.CodexCompanion };
+                    ShowSystemInfo = kind == WidgetKind.SystemInfo, };
                 settings.SetPlacement(kind, new WidgetPlacement { Anchor = WidgetAnchor.Custom, X = 0.2, Y = 0.25, IsLocked = false });
                 Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
                 var display = CreateDisplay(width, height);
@@ -294,82 +279,9 @@ public sealed class WidgetResolutionScaleTests
             finally { Assert.True(renderer.CloseSafelyAsync().IsCompletedSuccessfully); }
         }));
 
-    [Fact]
-    [Trait("Category", "LocalIntegration")]
-    public void Companion_CompletionExpiresOnce_AndIsNotReplayedByPollingOrRebuild()
-        => RunOnStaThread(() => RunWithOffscreenParent(parent =>
-        {
-            var renderer = new NativeWidgetRendererWindow();
-            renderer.SetWindowVisible(false);
-            try
-            {
-                var settings = new WidgetSettings { ShowClock = false, ShowSystemInfo = false, ShowCodexCompanion = true };
-                Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
-                renderer.AttachTo(parent, CreateDisplay(1920, 1080));
-                Assert.True(renderer.InitializeAsync(CancellationToken.None).IsCompletedSuccessfully);
-                var complete = new CodexCompanionSnapshot("complete", "작업 완료", "검증 완료", "D:\\Dev\\Vellume", "",
-                    DateTimeOffset.UtcNow, [], CodexUsageSnapshot.Unavailable());
-                Assert.True(renderer.UpdateCodexAsync(complete).IsCompletedSuccessfully);
-                Assert.Equal("작업 완료 · Vellume", renderer.CodexSummary);
-                var frame = new System.Windows.Threading.DispatcherFrame();
-                var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(5300) };
-                timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
-                timer.Start();
-                System.Windows.Threading.Dispatcher.PushFrame(frame);
-                Assert.Equal("대기 중 · Vellume", renderer.CodexSummary);
-                var presented = Assert.Single(renderer.PanelPresentationGenerations);
-                Assert.True(renderer.UpdateCodexAsync(complete with { UpdatedAtUtc = DateTimeOffset.UtcNow }).IsCompletedSuccessfully);
-                Assert.Equal(presented, Assert.Single(renderer.PanelPresentationGenerations));
-                settings.CodexScale = 1.1;
-                Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
-                Assert.Equal("대기 중 · Vellume", renderer.CodexSummary);
-            }
-            finally { Assert.True(renderer.CloseSafelyAsync().IsCompletedSuccessfully); }
-        }));
-
-    [Theory]
-    [InlineData(1920, 1080)]
-    [InlineData(3840, 2160)]
-    [Trait("Category", "LocalIntegration")]
-    public void Companion_DetailsStayInsideDisplay_AndCloseWhenHiddenOrDisposed(int width, int height)
-        => RunOnStaThread(() => RunWithOffscreenParent(parent =>
-        {
-            var renderer = new NativeWidgetRendererWindow();
-            try
-            {
-                var settings = new WidgetSettings { ShowClock = false, ShowSystemInfo = false, ShowCodexCompanion = true };
-                settings.CodexPlacement.Anchor = WidgetAnchor.BottomRight;
-                Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
-                var display = CreateDisplay(width, height);
-                renderer.AttachTo(parent, display);
-                Assert.True(renderer.InitializeAsync(CancellationToken.None).IsCompletedSuccessfully);
-                renderer.ToggleCodexDetails(); // Lock prevents movement, not opening details.
-                var details = renderer.CodexDetailsHandle;
-                Assert.NotEqual(nint.Zero, details);
-                AssertInsideDisplay(ReadPhysicalBounds(details), display);
-                Assert.True(renderer.UpdateCodexAsync(new CodexCompanionSnapshot("working", "빌드 중", "실제 작업 상태", "", "",
-                    DateTimeOffset.UtcNow, [], CodexUsageSnapshot.Unavailable())).IsCompletedSuccessfully);
-                Assert.Equal(details, renderer.CodexDetailsHandle);
-                Assert.Equal("작업 중", renderer.CodexSummary);
-                renderer.SetWindowVisible(false);
-                Assert.Equal(nint.Zero, renderer.CodexDetailsHandle);
-                Assert.False(NativeMethods.IsWindow(details));
-                renderer.ToggleCodexDetails();
-                Assert.Equal(nint.Zero, renderer.CodexDetailsHandle);
-                renderer.SetWindowVisible(true);
-                renderer.ToggleCodexDetails();
-                details = renderer.CodexDetailsHandle;
-                Assert.NotEqual(nint.Zero, details);
-                Assert.True(renderer.CloseSafelyAsync().IsCompletedSuccessfully);
-                Assert.False(NativeMethods.IsWindow(details));
-            }
-            finally { Assert.True(renderer.CloseSafelyAsync().IsCompletedSuccessfully); }
-        }));
-
     [Theory]
     [InlineData(WidgetKind.Clock)]
     [InlineData(WidgetKind.SystemInfo)]
-    [InlineData(WidgetKind.CodexCompanion)]
     [Trait("Category", "LocalIntegration")]
     public void HideWidget_PreservesDraggedPlacementAndScale_AndCanBeRestored(WidgetKind kind)
         => RunOnStaThread(() => RunWithOffscreenParent(parent =>
@@ -379,7 +291,7 @@ public sealed class WidgetResolutionScaleTests
             try
             {
                 var settings = new WidgetSettings { ShowClock = kind == WidgetKind.Clock,
-                    ShowSystemInfo = kind == WidgetKind.SystemInfo, ShowCodexCompanion = kind == WidgetKind.CodexCompanion };
+                    ShowSystemInfo = kind == WidgetKind.SystemInfo, };
                 settings.SetScale(kind, 1.137);
                 Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
                 var display = CreateDisplay(1920, 1080);

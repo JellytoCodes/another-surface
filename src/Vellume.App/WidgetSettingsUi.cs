@@ -97,7 +97,7 @@ public partial class MainWindow
         {
             WidgetKind.Clock => (ClockAnchorComboBox, ClockDisplayComboBox, ClockLockCheckBox),
             WidgetKind.SystemInfo => (SystemAnchorComboBox, SystemDisplayComboBox, SystemLockCheckBox),
-            _ => (CodexAnchorComboBox, CodexDisplayComboBox, CodexLockCheckBox)
+            _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
 
     private void RefreshWidgetPlacementControls()
@@ -109,7 +109,6 @@ public partial class MainWindow
         {
             ClockWidgetCheckBox.IsChecked = _settings.Widgets.ShowClock;
             SystemWidgetCheckBox.IsChecked = _settings.Widgets.ShowSystemInfo;
-            CodexCompanionWidgetCheckBox.IsChecked = _settings.Widgets.ShowCodexCompanion;
             var clockColor = WidgetSettings.NormalizeClockColor(_settings.Widgets.ClockColor);
             ClockColorTextBox.Text = clockColor;
             ClockColorSwatch.Background = new SolidColorBrush(

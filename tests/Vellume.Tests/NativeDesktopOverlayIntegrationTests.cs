@@ -424,8 +424,7 @@ public sealed class NativeDesktopOverlayIntegrationTests
             IsEnabled = true,
             ShowClock = true,
             ShowSystemInfo = true,
-            ShowCodexCompanion = true
-        };
+            };
         window.ApplySettingsAsync(
                 settings,
                 CancellationToken.None)
@@ -446,43 +445,6 @@ public sealed class NativeDesktopOverlayIntegrationTests
                         100),
                     DriveMetricsSnapshot.Unavailable("D"),
                     TimeSpan.FromHours(1)))
-            .GetAwaiter()
-            .GetResult();
-        window.UpdateCodexAsync(
-                new CodexCompanionSnapshot(
-                    "working",
-                    "빌드하는 중",
-                    "네이티브 위젯 테스트",
-                    "Vellume",
-                    "Codex",
-                    DateTimeOffset.UtcNow,
-                    [
-                        new CodexProjectSnapshot(
-                            "project:vellume",
-                            "working",
-                            "Vellume",
-                            "네이티브 위젯 테스트 중",
-                            "Vellume",
-                            DateTimeOffset.UtcNow)
-                    ],
-                    new CodexUsageSnapshot(
-                        true,
-                        [
-                            new CodexUsageLimitSnapshot(
-                                "codex",
-                                "CODEX PRO",
-                                42,
-                                DateTimeOffset.UtcNow.AddDays(3),
-                                TimeSpan.FromDays(7),
-                                "pro"),
-                            new CodexUsageLimitSnapshot(
-                                "codex_bengalfox",
-                                "GPT-5.3-Codex-Spark",
-                                91,
-                                DateTimeOffset.UtcNow.AddDays(4),
-                                TimeSpan.FromDays(7),
-                                "pro")
-                        ])))
             .GetAwaiter()
             .GetResult();
         var handlesBeforePause =
@@ -509,43 +471,6 @@ public sealed class NativeDesktopOverlayIntegrationTests
                     TimeSpan.FromHours(2)))
             .GetAwaiter()
             .GetResult();
-        window.UpdateCodexAsync(
-                new CodexCompanionSnapshot(
-                    "complete",
-                    "동결 중 캐시",
-                    "Resume 때 한 번 반영",
-                    "Vellume",
-                    "Codex",
-                    DateTimeOffset.UtcNow,
-                    [
-                        new CodexProjectSnapshot(
-                            "project:vellume",
-                            "complete",
-                            "Vellume",
-                            "작업 완료",
-                            "Vellume",
-                            DateTimeOffset.UtcNow)
-                    ],
-                    new CodexUsageSnapshot(
-                        true,
-                        [
-                            new CodexUsageLimitSnapshot(
-                                "codex",
-                                "CODEX PRO",
-                                41,
-                                DateTimeOffset.UtcNow.AddDays(3),
-                                TimeSpan.FromDays(7),
-                                "pro"),
-                            new CodexUsageLimitSnapshot(
-                                "codex_bengalfox",
-                                "GPT-5.3-Codex-Spark",
-                                90,
-                                DateTimeOffset.UtcNow.AddDays(4),
-                                TimeSpan.FromDays(7),
-                                "pro")
-                        ])))
-            .GetAwaiter()
-            .GetResult();
         Assert.Equal(
             handlesBeforePause,
             window.PanelHandles.ToArray());
@@ -568,7 +493,7 @@ public sealed class NativeDesktopOverlayIntegrationTests
         Assert.True(window.IsAttachedTo(parent));
         var panelHandles = window.PanelHandles.ToArray();
         // Independent surfaces remain small at arbitrary widget positions.
-        Assert.Equal(3, panelHandles.Length);
+        Assert.Equal(2, panelHandles.Length);
         Assert.Equal(
             panelHandles.Length,
             panelHandles.Distinct().Count());
@@ -764,7 +689,7 @@ public sealed class NativeDesktopOverlayIntegrationTests
             "backend=native-top-level-alpha-skins",
             window.GetAttachmentDiagnostics());
         Assert.Contains(
-            "panelCount=3",
+            "panelCount=2",
             window.GetAttachmentDiagnostics());
         Assert.Contains(
             "topLevelPanels=true",

@@ -15,11 +15,9 @@ internal sealed partial class NativeWidgetRendererWindow
         editor.MoveDragStateChanged += active => _pointerHook?.SetDeleteGesture(active ? editor.DeleteDuringMove : null);
         editor.DeleteRequested += () => HideWidget(state.Kind);
         state.Editor.DragPositionChanged += MoveWidget;
-        if (state.Kind == WidgetKind.CodexCompanion) state.Editor.Clicked += ToggleCodexDetails;
         state.Editor.TransformStarted += () =>
         {
             initialScale = _settings.GetScale(state.Kind);
-            if (state.Kind == WidgetKind.CodexCompanion) CloseCodexDetails();
         };
         state.Editor.TransformChanged += (factor, _, completed) => ResizeWidget(state.Kind, initialScale * factor, completed);
         state.Editor.SetBounds(_interactiveHostHandle, state.X, state.Y, state.Host.Width, state.Host.Height, _isWindowVisible);
@@ -43,13 +41,12 @@ internal sealed partial class NativeWidgetRendererWindow
     internal void ResizeWidget(WidgetKind kind, double scale, bool completed)
     {
         if (_disposed || !_widgetHosts.TryGetValue(kind, out var state) || _settings.GetPlacement(kind).IsLocked) return;
-        if (kind == WidgetKind.CodexCompanion) CloseCodexDetails();
         _settings.SetScale(kind, scale);
         var target = kind switch
         {
             WidgetKind.Clock => _clockRenderTarget,
             WidgetKind.SystemInfo => _systemRenderTarget,
-            _ => _codexRenderTarget
+            _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
         if (target?.Visual is Viewbox previous) previous.Child = null;
         var display = state.Display;
@@ -70,7 +67,6 @@ internal sealed partial class NativeWidgetRendererWindow
         {
             case WidgetKind.Clock: _clockRenderTarget = resized; break;
             case WidgetKind.SystemInfo: _systemRenderTarget = resized; break;
-            case WidgetKind.CodexCompanion: _codexRenderTarget = resized; break;
         }
         state.Editor?.SetBounds(_interactiveHostHandle, state.X, state.Y, prepared.Width, prepared.Height, _isWindowVisible);
         RefreshPointerTargets();
@@ -90,7 +86,6 @@ internal sealed partial class NativeWidgetRendererWindow
         _settings.SetVisible(kind, false);
         RebuildAlphaPanels();
         ApplyLastMetrics();
-        ApplyLastCodex();
         UpdateClockTimer();
         PlacementChanged?.Invoke(this, new WidgetPlacementChangedEventArgs(kind, placement, scale, isVisible: false));
     }
@@ -108,7 +103,6 @@ internal sealed partial class NativeWidgetRendererWindow
         _settings.Stickers[index] = item;
         RebuildAlphaPanels();
         ApplyLastMetrics();
-        ApplyLastCodex();
         UpdateClockTimer();
         StickerChanged?.Invoke(this, new StickerChangedEventArgs(item, isVisibilityChange: true));
     }
@@ -148,8 +142,7 @@ internal sealed partial class NativeWidgetRendererWindow
         var targets = new List<DesktopWidgetPointerHook.Target>();
         foreach (var state in _widgetHosts.Values)
             targets.Add(new(state.X, state.Y, state.Host.Width, state.Host.Height,
-                state.Editor?.Handle ?? nint.Zero, state.Host.HitTest, locked => SetWidgetLocked(state.Kind, locked),
-                state.Kind == WidgetKind.CodexCompanion ? ToggleCodexDetails : null));
+                state.Editor?.Handle ?? nint.Zero, state.Host.HitTest, locked => SetWidgetLocked(state.Kind, locked)));
         foreach (var item in _settings.Stickers)
             if (_stickerHosts.TryGetValue(item.Id, out var state))
                 targets.Add(new(state.X, state.Y, state.Host.Width, state.Host.Height,

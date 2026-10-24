@@ -19,8 +19,6 @@ public sealed class WidgetSettingsTests
         {
             ClockSide = WidgetSide.Left,
             SystemInfoSide = WidgetSide.Right,
-            CodexCompanionSide = WidgetSide.Left,
-            ShowCodexCompanion = true,
             SnapQuickSlotsToGrid = true,
             QuickSlotGridSize = 40,
             QuickSlotGroups = [group],
@@ -90,8 +88,6 @@ public sealed class WidgetSettingsTests
         Assert.Equal(4, copiedGroup.Columns);
         Assert.Equal(WidgetSide.Left, copy.ClockSide);
         Assert.Equal(WidgetSide.Right, copy.SystemInfoSide);
-        Assert.Equal(WidgetSide.Left, copy.CodexCompanionSide);
-        Assert.True(copy.ShowCodexCompanion);
         Assert.True(copy.SnapQuickSlotsToGrid);
         Assert.Equal(40, copy.QuickSlotGridSize);
         Assert.Equal(4, copy.SystemShortcuts.Count);

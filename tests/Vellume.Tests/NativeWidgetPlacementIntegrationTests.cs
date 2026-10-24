@@ -31,8 +31,7 @@ public sealed class NativeWidgetPlacementIntegrationTests
                 renderer.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult();
                 var settings = new WidgetSettings
                 {
-                    ShowClock = true, ShowSystemInfo = false, ShowCodexCompanion = false,
-                    ClockStyle = ClockStyle.DigitalStacked,
+                    ShowClock = true, ShowSystemInfo = false, ClockStyle = ClockStyle.DigitalStacked,
                     ClockPlacement = WidgetPlacement.FromAnchor(WidgetAnchor.Center, false)
                 };
                 renderer.ApplySettingsAsync(settings).GetAwaiter().GetResult();
@@ -123,8 +122,7 @@ public sealed class NativeWidgetPlacementIntegrationTests
             renderer.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult();
             var settings = new WidgetSettings
             {
-                ShowClock = true, ShowSystemInfo = false, ShowCodexCompanion = false,
-                ClockPlacement = WidgetPlacement.FromAnchor(WidgetAnchor.Center, false)
+                ShowClock = true, ShowSystemInfo = false, ClockPlacement = WidgetPlacement.FromAnchor(WidgetAnchor.Center, false)
             };
             renderer.ApplySettingsAsync(settings).GetAwaiter().GetResult();
             WidgetPlacementChangedEventArgs? saved = null;
@@ -187,8 +185,7 @@ public sealed class NativeWidgetPlacementIntegrationTests
             placement.DisplayId = secondary.Id;
             renderer.ApplySettingsAsync(new WidgetSettings
             {
-                ShowClock = true, ShowSystemInfo = false, ShowCodexCompanion = false,
-                ClockPlacement = placement
+                ShowClock = true, ShowSystemInfo = false, ClockPlacement = placement
             }).GetAwaiter().GetResult();
             secondary = new DisplayInfo
             {

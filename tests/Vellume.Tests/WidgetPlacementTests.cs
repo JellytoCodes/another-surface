@@ -12,25 +12,21 @@ public sealed class WidgetPlacementTests
         Assert.Equal(ClockStyle.DigitalClean, settings.ClockStyle);
         Assert.Equal(WidgetAnchor.TopRight, settings.ClockPlacement.Anchor);
         Assert.Equal(WidgetAnchor.CenterRight, settings.SystemInfoPlacement.Anchor);
-        Assert.Equal(WidgetAnchor.TopLeft, settings.CodexPlacement.Anchor);
         Assert.All(Enum.GetValues<WidgetKind>(), kind =>
             Assert.True(settings.GetPlacement(kind).IsLocked));
     }
 
     [Fact]
-    public void Copy_MigratesLegacySidesAndKeepsCompanionOnLeft()
+    public void Copy_MigratesLegacySides()
     {
         var settings = new WidgetSettings
         {
             ClockSide = WidgetSide.Left,
             SystemInfoSide = WidgetSide.Left,
-            CodexCompanionSide = WidgetSide.Right
         }.Copy();
 
         Assert.Equal(WidgetAnchor.TopLeft, settings.ClockPlacement.Anchor);
         Assert.Equal(WidgetAnchor.CenterLeft, settings.SystemInfoPlacement.Anchor);
-        Assert.Equal(WidgetAnchor.TopLeft, settings.CodexPlacement.Anchor);
-        Assert.Equal(WidgetSide.Left, settings.CodexCompanionSide);
     }
 
     [Fact]
@@ -49,7 +45,6 @@ public sealed class WidgetPlacementTests
                 DisplayId = " DISPLAY2 "
             },
             SystemInfoPlacement = WidgetPlacement.FromAnchor(WidgetAnchor.BottomCenter),
-            CodexPlacement = WidgetPlacement.FromAnchor(WidgetAnchor.BottomRight)
         };
 
         var copy = original.Copy();
@@ -57,14 +52,12 @@ public sealed class WidgetPlacementTests
         Assert.Equal(ClockStyle.DigitalStacked, copy.ClockStyle);
         Assert.NotSame(original.ClockPlacement, copy.ClockPlacement);
         Assert.NotSame(original.SystemInfoPlacement, copy.SystemInfoPlacement);
-        Assert.NotSame(original.CodexPlacement, copy.CodexPlacement);
         Assert.Equal(WidgetAnchor.Custom, copy.ClockPlacement.Anchor);
         Assert.Equal(0.2, copy.ClockPlacement.X);
         Assert.Equal(0.8, copy.ClockPlacement.Y);
         Assert.False(copy.ClockPlacement.IsLocked);
         Assert.Equal("DISPLAY2", copy.ClockPlacement.DisplayId);
         Assert.Equal(WidgetAnchor.BottomCenter, copy.SystemInfoPlacement.Anchor);
-        Assert.Equal(WidgetAnchor.BottomRight, copy.CodexPlacement.Anchor);
         original.ClockPlacement.X = 0.9;
         Assert.Equal(0.2, copy.ClockPlacement.X);
     }
@@ -89,7 +82,6 @@ public sealed class WidgetPlacementTests
                 X = -10,
                 Y = 10
             },
-            CodexPlacement = new WidgetPlacement { Anchor = (WidgetAnchor)999 }
         }.Copy();
 
         Assert.Equal(ClockStyle.DigitalClean, settings.ClockStyle);
@@ -100,7 +92,6 @@ public sealed class WidgetPlacementTests
         Assert.Null(settings.ClockPlacement.DisplayId);
         Assert.Equal(0, settings.SystemInfoPlacement.X);
         Assert.Equal(1, settings.SystemInfoPlacement.Y);
-        Assert.Equal(WidgetAnchor.TopLeft, settings.CodexPlacement.Anchor);
     }
 
     [Theory]

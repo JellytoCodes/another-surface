@@ -50,8 +50,6 @@ public interface IWallpaperController : IAsyncDisposable
         WidgetSettings widgets,
         DisplayInfo? display = null,
         CancellationToken cancellationToken = default);
-    Task<string> InstallCodexCompanionBridgeAsync(
-        CancellationToken cancellationToken = default);
     Task CompleteDesktopWallpaperHandoffAsync(
         CancellationToken cancellationToken = default);
 }
