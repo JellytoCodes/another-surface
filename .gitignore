@@ -9,3 +9,6 @@ TestResults/
 
 # Local staging packages, rollback backups and one-off diagnostics.
 /tmp/
+
+# Build caches, rollback packages and diagnostics.
+/.work/

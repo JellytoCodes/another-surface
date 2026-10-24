@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="Vellume.App/Assets/Brand/vellume-dock-icon-v3.png" width="112" alt="Vellume 아이콘" />
+  <img src="src/Vellume.App/Assets/Brand/vellume-dock-icon-v3.png" width="112" alt="Vellume 아이콘" />
 </p>
 <h1 align="center">Vellume</h1>
 <p align="center">
   <strong>월페이퍼, 위젯, Dock을 한곳에서 관리하는 Windows 데스크톱 앱</strong><br />
-  0.9.2 · Windows x64 · C# / WPF + C++20
+  0.10.0 · Windows x64 · C# / WPF + C++20
 </p>
 
 Vellume은 로컬 이미지와 영상을 바탕화면에 적용하고, 시계·시스템 정보·앱 실행 Dock을 함께 구성하는 데스크톱 커스터마이징 앱입니다. 설정과 앱 수명 주기는 WPF가 담당하고, 이미지·영상 월페이퍼는 별도 C++ 렌더러를 우선 사용합니다.
@@ -15,7 +15,7 @@ Vellume은 로컬 이미지와 영상을 바탕화면에 적용하고, 시계·�
 
 | 영역 | 기능 |
 | --- | --- |
-| 로컬 월페이퍼 | 이미지, GIF, MP4·WebM, 로컬 HTML 등록. 화면 채우기·맞춤·늘이기, 밝기·대비·채도, 음소거·볼륨 조절 |
+| 로컬 월페이퍼 | 이미지, GIF, MP4·WebM 등록. 화면 채우기·맞춤·늘이기, 밝기·대비·채도, 음소거·볼륨 조절 |
 | 다중 모니터 | 모니터별 월페이퍼와 재생 옵션 저장·복원. 전체 또는 화면별 재생·일시정지·중지 |
 | 데스크톱 위젯 | 색상을 지정하는 시계 5종, SysDash 스타일의 CPU·GPU·RAM 추이와 디스크 사용량. 항목·색상·크기·배경 조절, 위젯별 Lock·드래그 이동, 9방향 배치와 모니터 선택 |
 | 스티커 | 기본 PNG 25종을 여러 장 배치. 드래그 이동·크기 조절·회전, 스티커별 모니터·표시·Lock 설정과 자동 저장 |
@@ -35,35 +35,31 @@ Vellume은 로컬 이미지와 영상을 바탕화면에 적용하고, 시계·�
 | --- | --- |
 | 운영체제 | Windows 10 1809 이상 또는 Windows 11, x64 — 프로젝트 대상 기준 |
 | 앱 런타임 | .NET 8 Desktop Runtime, x64 |
-| HTML·호환 재생 | Microsoft Edge WebView2 Runtime |
 | 영상 최적화 — 선택 | FFmpeg와 FFprobe. 없거나 변환에 실패하면 원본 영상으로 재생 |
 
 일반 실행에는 관리자 권한이 필요하지 않습니다. 영상 재생 가능 여부는 파일의 코덱과 Windows 미디어 환경에 따라 달라집니다.
 
-[최신 GitHub Release](https://github.com/JellytoCodes/Vellume/releases/latest)의 `Vellume-0.9.2-win-x64.zip`을 다운로드해 압축을 풉니다. 저장소에 동봉된 실행 파일은 [`artifacts/Vellume-0.9.2/`](artifacts/Vellume-0.9.2/)에 있습니다. EXE만 분리하지 말고 DLL·Assets·네이티브 렌더러를 포함한 폴더 전체를 유지한 상태로 `Vellume.App.exe`를 실행합니다. `BuildInfo.json`에서 배포본의 소스 커밋과 파일 해시를 확인할 수 있습니다.
+[최신 GitHub Release](https://github.com/JellytoCodes/Vellume/releases/latest)의 `Vellume-0.10.0-win-x64.zip`을 다운로드해 압축을 풉니다. 저장소에 동봉된 실행 파일은 [`artifacts/Vellume-0.10.0/`](artifacts/Vellume-0.10.0/)에 있습니다. EXE만 분리하지 말고 DLL·Assets·네이티브 렌더러를 포함한 폴더 전체를 유지한 상태로 `Vellume.App.exe`를 실행합니다. `BuildInfo.json`에서 배포본의 소스 커밋과 파일 해시를 확인할 수 있습니다.
 
 ### 기본 사용 흐름
 
-1. **월페이퍼** 화면에서 이미지·GIF·영상 파일 또는 HTML 폴더를 등록합니다. 위쪽 콘텐츠 목록은 세로로 스크롤하며, 형식 필터와 이름 검색으로 항목을 찾습니다.
+1. **월페이퍼** 화면에서 이미지·GIF·영상 파일을 등록합니다. 위쪽 콘텐츠 목록은 세로로 스크롤하며, 형식 필터와 이름 검색으로 항목을 찾습니다.
 2. 콘텐츠와 아래쪽 디스플레이 카드를 선택하고 **선택 화면에 적용**을 누릅니다. 디스플레이 목록은 가로 스크롤과 마우스 휠을 지원하며, 각 화면의 현재 배경과 재생 상태를 함께 표시합니다. 콘텐츠 행의 **적용** 버튼이나 행 더블 클릭도 선택한 디스플레이에 적용합니다.
 3. 선택한 디스플레이의 화면 맞춤·음량은 설정에서 조정합니다. **위젯**에서 시계·시스템 정보·스티커를, **Dock**에서 앱 고정·크기·작업표시줄 표시를 구성합니다.
 
 위젯 화면에서 아날로그 2종·디지털 3종 중 시계를 선택합니다. **시계 색상**에서 색상 선택창을 열거나 `#RRGGBB` 코드를 입력해 적용합니다. 색상은 미리보기와 바탕화면에 반영되고 저장됩니다. 각 위젯의 배치와 모니터를 선택하거나 **Lock**을 해제한 뒤 바탕화면의 위젯을 드래그합니다. 시계·시스템 정보·컴패니언은 오른쪽 아래 **↘ 손잡이**로 비율을 유지하며 크기를 연속 조절합니다. 정보 위젯에는 회전 손잡이가 없습니다. 드롭한 위치는 저장되며, **전체 Lock**으로 이동을 잠글 수 있습니다. 저장한 자유 배치는 화면 크기가 바뀌어도 상대 위치를 유지합니다. 위젯과 스티커 위에서 **우클릭하면 Lock**, **Alt+우클릭하면 Unlock**합니다. **잠금 해제한 위젯·스티커를 왼쪽 버튼으로 잡고 Delete**를 누르면 미표시로 바뀝니다. 배치·크기·회전값과 스티커 기록은 보존하며, 위젯 체크박스나 스티커의 표시 체크박스로 다시 켤 수 있습니다. 크기·회전 손잡이 조작 중에는 Delete로 숨기지 않습니다. 잠긴 항목을 해제할 때는 보이는 그림·글자·배경 부분을 가리키세요. 다른 앱이 가린 영역의 우클릭은 해당 앱에 전달됩니다.
 
-**지원 형식:** `.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.mp4`, `.webm`, `.html`, `.htm`, `index.html`이 포함된 폴더.
+**지원 형식:** `.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.mp4`, `.webm`.
 
 **시스템 정보:** [SysDash](https://github.com/marcopixel/SysDash)의 배치를 참고해 Vellume의 WPF 위젯으로 구현했습니다. CPU·GPU·RAM은 최근 60회 측정 추이 그래프, C:·D:는 디스크 사용률 막대를 표시합니다. 표시 항목, 강조색·글자색, 크기(50–200%), 배경 불투명도(0–100%)를 조절하며 미리보기와 바탕화면에 적용·저장됩니다. GPU 측정이나 드라이브를 사용할 수 없으면 `N/A`로 표시합니다. Rainmeter나 외부 센서 플러그인 설치는 필요하지 않습니다.
 
 **스티커:** 위젯 화면의 기본 이미지 25종 중 하나를 누르면 한 장씩 추가됩니다. 바탕화면에서 드래그로 이동하고, 오른쪽 아래 손잡이로 크기, 위쪽 손잡이로 회전을 조절합니다. 스티커 목록에서 모니터·표시·Lock을 바꾸거나 크기·각도를 입력해 적용할 수 있습니다. 같은 이미지도 여러 장 붙일 수 있으며, 각 목록 행의 ▲·▼로 겹침 우선순위를 바꿉니다. 목록 위쪽이 앞에 표시되며, Lock 상태에서도 순서 변경과 저장이 가능합니다. 설정은 자동 저장됩니다. **전체 Lock**은 스티커에도 적용됩니다.
 
-등록한 콘텐츠는 `%LocalAppData%\Vellume\Library`의 항목별 폴더로 복사합니다. 라이브러리에서 항목을 삭제해도 가져온 원본 파일은 삭제하지 않습니다. CSS·JavaScript·이미지를 상대 경로로 참조하는 HTML은 파일 하나가 아니라 **HTML 폴더 추가**로 등록해야 관련 리소스가 함께 복사됩니다.
+등록한 콘텐츠는 `%LocalAppData%\Vellume\Library`의 항목별 폴더로 복사합니다. 라이브러리에서 항목을 삭제해도 가져온 원본 파일은 삭제하지 않습니다. HTML 파일과 HTML 폴더는 지원하지 않습니다.
 
 Dock은 앱을 클릭해 실행하거나 열린 창으로 전환할 수 있습니다. 창이 여러 개면 클릭으로 순환하거나 우클릭의 `열린 창` 목록에서 선택합니다. 다른 창 뒤로 가려진 Dock은 **Alt + 백틱 키(숫자 1 왼쪽)** 으로 앞으로 불러올 수 있습니다.
 
 월페이퍼의 **중지**는 앱 종료와 다릅니다. Vellume 전체를 종료할 때는 설정의 **Vellume 종료**를 사용합니다. Windows 작업표시줄을 숨겨 사용한 경우 정상 종료 시 복원됩니다.
-
-> [!WARNING]
-> 로컬 HTML도 JavaScript를 실행할 수 있습니다. 신뢰할 수 있는 콘텐츠만 등록하세요.
 
 ## 소스에서 빌드
 
@@ -83,36 +79,36 @@ Windows PowerShell에서 저장소를 받은 뒤 테스트 프로젝트의 패�
 ```powershell
 git clone https://github.com/JellytoCodes/Vellume.git
 Set-Location Vellume
-dotnet restore .\Vellume.Tests\Vellume.Tests.csproj
+dotnet restore .\tests\Vellume.Tests\Vellume.Tests.csproj
 ```
 
 복원이 성공하면 저장소 루트에서 빌드합니다.
 
 ```powershell
-.\build-release.ps1
+.\scripts\build-release.ps1
 ```
 
-[`build-release.ps1`](build-release.ps1)은 **C++ 네이티브 렌더러 → WPF 앱 → 테스트** 순서로 실행합니다. 테스트 단계가 `--no-restore`를 사용하므로 최초 빌드 전 위 복원 단계가 필요합니다. 네이티브 EXE는 앱 출력 폴더에 복사됩니다.
+[`scripts/build-release.ps1`](scripts/build-release.ps1)은 **C++ 네이티브 렌더러 → WPF 앱 → 테스트** 순서로 실행합니다. 필요한 NuGet 패키지는 자동 복원합니다. 네이티브 EXE는 앱 출력 폴더에 복사됩니다.
 
-배포 폴더까지 갱신할 때는 Vellume을 종료하고 `.\build-release.ps1 -Package`를 실행합니다. 빌드·테스트 성공 후 기존 배포본을 `tmp/`에 백업하고 `artifacts/Vellume-0.9.2/` 전체를 교체합니다. `BuildInfo.json`에 소스 커밋과 SHA-256을 기록하고 복사된 파일을 검증합니다.
+배포 폴더까지 갱신할 때는 Vellume을 종료하고 `.\scripts\build-release.ps1 -Package`를 실행합니다. 빌드·테스트 성공 후 기존 배포본을 `.work/tmp/`에 백업하고 `artifacts/Vellume-0.10.0/` 전체를 교체합니다. `BuildInfo.json`에 소스 커밋과 SHA-256을 기록하고 복사된 파일을 검증합니다.
 
 빌드가 성공한 다음 실행합니다.
 
 ```powershell
-& '.\Vellume.App\bin\Release\net8.0-windows10.0.17763.0\Vellume.App.exe'
+& '.\src\Vellume.App\bin\Release\net8.0-windows10.0.17763.0\Vellume.App.exe'
 ```
 
 테스트만 다시 실행하거나 테스트를 생략해 빌드할 때는 다음 명령을 사용합니다.
 
 ```powershell
 # 테스트만 실행
-dotnet test .\Vellume.Tests\Vellume.Tests.csproj -c Release
+dotnet test .\tests\Vellume.Tests\Vellume.Tests.csproj -c Release
 
 # 테스트를 생략하고 빌드
-.\build-release.ps1 -SkipTests
+.\scripts\build-release.ps1 -SkipTests
 ```
 
-앱 프로젝트만 `dotnet build`하면 C++ 프로젝트가 함께 빌드되지는 않습니다. 네이티브 렌더러를 포함한 실행 환경을 준비할 때는 `build-release.ps1`을 사용합니다.
+앱 프로젝트만 `dotnet build`하면 C++ 프로젝트가 함께 빌드되지는 않습니다. 네이티브 렌더러를 포함한 실행 환경을 준비할 때는 `scripts/build-release.ps1`을 사용합니다.
 
 ## 렌더링 구조
 
@@ -122,7 +118,7 @@ dotnet test .\Vellume.Tests\Vellume.Tests.csproj -c Release
 | 정적 이미지 | C++ 렌더러: WIC 디코딩 → D3D11·Direct2D·DirectComposition |
 | 기본 화면 보정의 MP4·WebM | C++ 렌더러: Media Foundation Media Engine의 HWND 출력 |
 | GIF | 관리형 렌더 호스트의 WIC 기반 재생 |
-| 로컬 HTML·호환 재생 | 관리형 렌더 호스트와 WebView2 등 콘텐츠별 호환 경로 |
+| 영상 색상 보정·호환 재생 | 관리형 렌더 호스트의 Windows MediaElement와 HLSL 픽셀 셰이더 |
 | 시계·시스템 정보·컴패니언 | 월페이퍼와 분리된 작은 WPF/Win32 위젯 표면 |
 
 월페이퍼 창은 Explorer의 WorkerW/Progman에 연결합니다. 네이티브 렌더러는 별도 프로세스로 실행하며, 앱과 버전이 지정된 바이너리 IPC로 통신합니다. 네이티브 초기화나 영상 코덱 지원에 문제가 생기면 관리형 렌더러로 전환합니다.
@@ -139,19 +135,25 @@ FFmpeg와 FFprobe는 앱 폴더 또는 `PATH`에서 찾습니다. 별도 경로�
 
 프록시는 `.vellume-cache`에 저장합니다. 30일 동안 사용하지 않은 캐시를 정리하고, 총량이 2GiB를 넘으면 오래된 항목부터 정리합니다. 재생 중이거나 사용 예정인 항목은 보호하므로 2GiB는 엄격한 상한이 아닙니다.
 
-영상의 밝기·대비·채도를 기본값에서 변경하면 색상 보정을 지원하는 관리형 렌더러로 전환할 수 있습니다. **첫 전환에서 재생 위치가 유지되지 않아 영상이 처음부터 시작될 수 있습니다.** 보정값을 다시 기본값으로 돌려도 즉시 C++ 렌더러로 복귀하지 않으며, 월페이퍼를 다시 적용해야 합니다.
+영상의 밝기·대비·채도를 기본값에서 변경하면 색상 보정을 지원하는 Windows 영상 렌더러와 픽셀 셰이더로 전환할 수 있습니다. WebView2와 브라우저 프로세스는 사용하지 않습니다. **첫 전환에서 재생 위치가 유지되지 않아 영상이 처음부터 시작될 수 있습니다.** 보정값을 다시 기본값으로 돌려도 즉시 C++ 렌더러로 복귀하지 않으며, 월페이퍼를 다시 적용해야 합니다.
 
 ## 프로젝트 구조
 
 | 경로 | 역할 |
 | --- | --- |
-| [`Vellume.App/`](Vellume.App/) | WPF 설정 UI, 트레이, Dock, 단일 인스턴스와 앱 수명 주기 |
-| [`Vellume.Core/`](Vellume.Core/) | 모델·계약, JSON 설정, 관리형 라이브러리, 파일 검증, 영상 프록시 캐시 |
-| [`Vellume.Windows/`](Vellume.Windows/) | WorkerW/Win32 연결, 모니터 관리, 렌더러 제어·폴백, 위젯, Codex 브리지 |
-| [`Vellume.Renderer.Native/`](Vellume.Renderer.Native/) | C++20 x64 이미지·영상 렌더러와 IPC |
-| [`Vellume.Tests/`](Vellume.Tests/) | 설정·파일 관리·캐시·재생 정책·렌더러·Windows 통합 테스트 |
-| [`build-release.ps1`](build-release.ps1) | 네이티브 렌더러와 앱 빌드, 테스트 실행 |
-| [`build-app-icon.ps1`](build-app-icon.ps1) | 원본 PNG에서 실행 파일용 다중 해상도 ICO 생성 |
+| [`src/Vellume.App/`](src/Vellume.App/) | WPF 설정 UI, 트레이, Dock, 단일 인스턴스와 앱 수명 주기 |
+| [`src/Vellume.Core/`](src/Vellume.Core/) | 모델·계약, JSON 설정, 관리형 라이브러리, 파일 검증, 영상 프록시 캐시 |
+| [`src/Vellume.Windows/`](src/Vellume.Windows/) | WorkerW/Win32 연결, 모니터 관리, 렌더러 제어·폴백, 위젯, Codex 브리지 |
+| [`src/Vellume.Renderer.Native/`](src/Vellume.Renderer.Native/) | C++20 x64 이미지·영상 렌더러와 IPC |
+| [`tests/Vellume.Tests/`](tests/Vellume.Tests/) | 설정·파일 관리·캐시·재생 정책·렌더러·Windows 통합 테스트 |
+| [`scripts/build-release.ps1`](scripts/build-release.ps1) | 네이티브 렌더러와 앱 빌드, 테스트 실행 |
+| [`scripts/build-app-icon.ps1`](scripts/build-app-icon.ps1) | 원본 PNG에서 실행 파일용 다중 해상도 ICO 생성 |
+
+실행에 쓰는 자산은 `src/Vellume.App/Assets/`, 사용하지 않는 시안과 생성 원본은 `assets/originals/`에 보관합니다. 원본 폴더는 배포에 포함하지 않습니다. `artifacts/`에는 최신 배포 폴더만 유지하며 이전 버전은 GitHub Releases에서 받습니다. 빌드 캐시·임시 파일·검증 결과·교체 전 백업은 Git에서 제외한 `.work/`에 모읍니다.
+
+설정 화면의 시계·시스템 정보·스티커 미리보기는 위젯 페이지를 열 때 생성하고 페이지를 떠나거나 창을 숨기면 해제합니다. 월페이퍼 썸네일도 표시 중에만 메모리에 유지하며 디스크 캐시는 보존합니다. 컴패니언·Dock 이미지는 표시용 크기로 디코딩합니다.
+
+생성 파일만 정리할 때는 `./scripts/clean.ps1`을 사용합니다. `-WhatIf`로 대상을 먼저 확인할 수 있고, `-Caches`를 추가하면 NuGet·CLI 캐시까지 삭제합니다. 앱 데이터, 자산 원본, 배포 폴더는 정리 대상이 아닙니다.
 
 ## 데이터와 선택 기능
 
@@ -164,7 +166,7 @@ FFmpeg와 FFprobe는 앱 폴더 또는 `PATH`에서 찾습니다. 별도 경로�
 | `Logs\vellume.log` | 앱 동작과 오류 로그 |
 | `Logs\crash.log` | 처리되지 않은 스레드 예외가 발생했을 때 남기는 긴급 로그 |
 | `Logs\session-guard.log` | 감시 대상 PID, 종료 코드, 비정상 표식과 재실행 결과 |
-| `WebView2\` | HTML·호환 재생용 WebView2 데이터 |
+| `Renderer\` | 관리형 렌더 호스트 데이터 |
 | `Codex\` | 컴패니언 브리지와 `status.json` |
 | `session.active` | 비정상 종료 감지 표식 |
 | `GpuSafety\` | 구버전 호환을 포함한 Windows 배경 복구용 데이터 |
@@ -180,9 +182,8 @@ Codex 컴패니언은 로컬 프로세스와 세션 활동으로 기본 상태�
 | 앱이 실행되지 않음 | x64 .NET 8 Desktop Runtime 설치 여부, EXE와 DLL·Assets가 같은 배포 폴더에 있는지 확인 |
 | 빌드할 SDK를 찾지 못함 | `dotnet --list-sdks` 결과와 `global.json`의 SDK 설정 확인 |
 | C++ 빌드 도구를 찾지 못함 | Visual Studio Installer에서 MSVC v143 x64와 Windows SDK 설치 확인 |
-| 테스트 복원 오류 | `dotnet restore .\Vellume.Tests\Vellume.Tests.csproj` 실행 후 다시 빌드 |
-| HTML의 이미지·스타일이 누락됨 | `index.html`과 필요한 리소스를 한 폴더에 모아 HTML 폴더로 다시 등록 |
-| 특정 영상이 재생되지 않음 | 로그에서 선택된 렌더러와 오류 확인. 시스템 코덱·WebView2 Runtime 및 다른 영상 재생 여부 비교 |
+| 테스트 복원 오류 | `dotnet restore .\tests\Vellume.Tests\Vellume.Tests.csproj` 실행 후 다시 빌드 |
+| 특정 영상이 재생되지 않음 | 로그에서 선택된 렌더러와 오류 확인. 시스템 코덱 및 다른 영상 재생 여부 비교 |
 | 영상 최적화가 적용되지 않음 | FFmpeg·FFprobe 설치/경로, 최적화 옵션, 프록시 생성 로그 확인. 대상이 아닌 영상은 원본 사용 |
 | 렌더링 깜빡임·호환 문제 | `VELLUME_DISABLE_NATIVE_RENDERER=1`로 관리형 렌더러와 비교. GPU·드라이버·DPI·파일 형식도 함께 기록 |
 

@@ -1,0 +1,1063 @@
+<Window x:Class="Vellume.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Vellume"
+        Icon="pack://application:,,,/Assets/Brand/vellume-app.ico"
+        Width="1080"
+        Height="700"
+        MinWidth="900"
+        MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource WindowBrush}"
+        Loaded="Window_Loaded"
+        Closing="Window_Closing">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="218"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0"
+                Background="#0D111A"
+                BorderBrush="#202635"
+                BorderThickness="0,0,1,0">
+            <Grid Margin="18,22">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="28"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel>
+                    <TextBlock Text="VELLUME"
+                               FontSize="22"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource AccentBrush}"/>
+                    <TextBlock Text="라이브 데스크톱 · 0.9.2"
+                               Margin="0,4,0,0"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               FontSize="12"/>
+                </StackPanel>
+
+                <StackPanel Grid.Row="2">
+                    <Button Style="{StaticResource NavigationButton}"
+                                Content="▦   월페이퍼"
+                            Click="WallpaperNavigation_Click"/>
+                    <Button Style="{StaticResource NavigationButton}"
+                                Content="⌁   위젯"
+                            Click="WidgetsNavigation_Click"/>
+                    <Button Style="{StaticResource NavigationButton}"
+                                Content="▤   Dock"
+                            Click="DockNavigation_Click"/>
+                    <Button Style="{StaticResource NavigationButton}"
+                                Content="⚙   설정"
+                            Click="SettingsNavigation_Click"/>
+                </StackPanel>
+
+                <StackPanel Grid.Row="3">
+                    <Border Background="{StaticResource SurfaceBrush}"
+                            CornerRadius="8"
+                            Padding="12">
+                        <StackPanel>
+                            <TextBlock Text="월페이퍼 상태"
+                                       FontSize="11"
+                                       Foreground="{StaticResource MutedTextBrush}"/>
+                            <TextBlock x:Name="SidebarStatusText"
+                                       Text="중지됨"
+                                       TextWrapping="Wrap"
+                                       Margin="0,5,0,0"
+                                       FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Border>
+                    <Button Content="Vellume 종료"
+                            Margin="0,10,0,0"
+                            Padding="12,9"
+                            Background="#522A35"
+                            Foreground="#FFF1F4"
+                            Click="ExitButton_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Column="1" Margin="34,28">
+            <Grid x:Name="WallpaperPage">
+                <Grid.Resources>
+                    <Style x:Key="WallpaperSelectionItem" TargetType="ListBoxItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Margin" Value="0,0,0,8"/>
+                        <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+                        <Setter Property="BorderBrush" Value="#293146"/>
+                        <Setter Property="BorderThickness" Value="1"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                            CornerRadius="10">
+                                        <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="#211D3D"/>
+                                <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                    <Style x:Key="DisplaySelectionItem" TargetType="ListBoxItem"
+                           BasedOn="{StaticResource WallpaperSelectionItem}">
+                        <Setter Property="Width" Value="232"/>
+                        <Setter Property="Margin" Value="0,0,10,0"/>
+                    </Style>
+                    <Style x:Key="ApplyWallpaperButton" TargetType="Button"
+                           BasedOn="{StaticResource {x:Type Button}}">
+                        <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+                        <Setter Property="ToolTip">
+                            <Setter.Value>
+                                <Binding Path="SelectedItem.Name" ElementName="DisplayList"
+                                         StringFormat="적용 대상: {0}" TargetNullValue="디스플레이를 선택하세요" FallbackValue="디스플레이를 선택하세요"/>
+                            </Setter.Value>
+                        </Setter>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsWallpaperApplying, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <Setter Property="IsEnabled" Value="False"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedItem, ElementName=DisplayList}" Value="{x:Null}">
+                                <Setter Property="IsEnabled" Value="False"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Resources>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*" MinHeight="100"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,12,0">
+                        <TextBlock Text="월페이퍼" FontSize="30" FontWeight="Bold"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Button Content="+ 파일 추가" Click="AddFileButton_Click" Margin="0,0,8,0"/>
+                    </StackPanel>
+                </Grid>
+
+                <Grid Grid.Row="1" Margin="0,14,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="170"/>
+                    </Grid.ColumnDefinitions>
+                    <WrapPanel x:Name="LibraryFilterBar" VerticalAlignment="Center">
+                        <Button Content="전체" Tag="All" Click="LibraryFilter_Click" Padding="12,7" Margin="0,0,6,0" Background="{StaticResource AccentBrush}"/>
+                        <Button Content="이미지" Tag="Image" Click="LibraryFilter_Click" Padding="12,7" Margin="0,0,6,0"/>
+                        <Button Content="영상" Tag="Video" Click="LibraryFilter_Click" Padding="12,7" Margin="0,0,6,0"/>
+                        <Button Content="GIF" Tag="Gif" Click="LibraryFilter_Click" Padding="12,7" Margin="0,0,6,0"/>
+                        <TextBlock x:Name="LibraryFilterLabel" Text="0개" VerticalAlignment="Center" FontSize="12" Foreground="{StaticResource MutedTextBrush}"/>
+                    </WrapPanel>
+                    <Grid Grid.Column="1" Margin="8,0,0,0">
+                        <TextBox x:Name="LibrarySearchBox" TextChanged="LibrarySearchBox_TextChanged"
+                                 Background="{StaticResource SurfaceBrush}" Foreground="{StaticResource TextBrush}"
+                                 BorderBrush="#343D50" BorderThickness="1" Padding="9,7"
+                                 VerticalContentAlignment="Center" ToolTip="이름으로 검색"
+                                 AutomationProperties.Name="월페이퍼 이름 검색"/>
+                        <TextBlock Text="이름 검색" Margin="10,0" VerticalAlignment="Center"
+                                   Foreground="{StaticResource MutedTextBrush}" IsHitTestVisible="False">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=LibrarySearchBox}" Value="">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                </Grid>
+
+                <Grid Grid.Row="2">
+                    <ListBox x:Name="LibraryList" SelectionMode="Single"
+                             SelectionChanged="LibraryList_SelectionChanged"
+                             MouseDoubleClick="LibraryList_MouseDoubleClick"
+                             ItemContainerStyle="{StaticResource WallpaperSelectionItem}"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.CanContentScroll="True"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             VirtualizingPanel.ScrollUnit="Pixel">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="104"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="92" Height="60" CornerRadius="7" Background="#2A3150" HorizontalAlignment="Left">
+                                        <Grid>
+                                            <TextBlock Text="{Binding KindLabel}" Foreground="#BEC8D1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Source, ElementName=WallpaperThumbnail}" Value="{x:Null}">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <Image x:Name="WallpaperThumbnail" Stretch="Uniform" Loaded="WallpaperThumbnail_Loaded" Unloaded="WallpaperThumbnail_Unloaded"
+                                                   DataContextChanged="WallpaperThumbnail_DataContextChanged"/>
+                                        </Grid>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
+                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"
+                                                   FontSize="15" FontWeight="SemiBold"/>
+                                        <TextBlock Text="{Binding StorageLabel}" Margin="0,4,0,0" Foreground="{StaticResource MutedTextBrush}" FontSize="11"/>
+                                        <TextBlock Text="{Binding VideoRangeLabel}" TextTrimming="CharacterEllipsis" FontSize="11" Foreground="{StaticResource MutedTextBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Content="구간" Click="VideoRangeButton_Click" Tag="{Binding}"
+                                                ToolTip="영상 재생 구간 설정" Padding="11,8" Margin="0,0,6,0">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding KindLabel}" Value="영상">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                        <Button Content="적용" Click="ApplyCardButton_Click" Tag="{Binding}"
+                                                Style="{StaticResource ApplyWallpaperButton}" Padding="12,8" Margin="0,0,6,0"/>
+                                        <Button Content="삭제" Click="RemoveCardButton_Click" Tag="{Binding}" Padding="11,8"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Margin="20">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasItems, ElementName=LibraryList}" Value="False">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <TextBlock x:Name="LibraryEmptyText" Text="등록된 콘텐츠 없음" FontSize="16" TextAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+
+                <Grid Grid.Row="3" Margin="0,12,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="적용할 디스플레이" FontWeight="SemiBold"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="모두 중지" Click="StopAllButton_Click"
+                                Padding="10,5" Background="#522A35" ToolTip="모든 디스플레이의 월페이퍼를 중지합니다."/>
+                    </Grid>
+                    <ListBox x:Name="DisplayList" Grid.Row="1" Height="74" SelectionMode="Single"
+                             SelectionChanged="DisplayList_SelectionChanged"
+                             PreviewMouseWheel="DisplayList_PreviewMouseWheel"
+                             ItemContainerStyle="{StaticResource DisplaySelectionItem}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                             ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                             ScrollViewer.CanContentScroll="True"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             VirtualizingPanel.ScrollUnit="Pixel">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="10,5">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="12"
+                                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding}"/>
+                                        <TextBlock Grid.Column="1" Text="주 화면" FontSize="10" Foreground="{StaticResource AccentBrush}" Margin="6,1,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsPrimary}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Grid.Column="2" Text="{Binding WallpaperStatusLabel}" FontSize="10"
+                                                   Foreground="{StaticResource MutedTextBrush}" Margin="8,1,0,0"/>
+                                    </Grid>
+                                    <Grid Grid.Row="1" Margin="0,4,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding AssignedWallpaperName}" ToolTip="{Binding AssignedWallpaperName}"
+                                                   TextTrimming="CharacterEllipsis" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                        <Button Content="{Binding PauseButtonLabel}" Tag="{Binding}" Click="DisplayPauseButton_Click"
+                                                Padding="8,3" FontSize="10" Margin="0,0,5,0">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                    <Setter Property="IsEnabled" Value="{Binding HasAssignedWallpaper}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsWallpaperApplying, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                            <Setter Property="IsEnabled" Value="False"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                        <Button Content="중지" Tag="{Binding}" Click="DisplayStopButton_Click"
+                                                IsEnabled="{Binding HasAssignedWallpaper}" Padding="8,3" FontSize="10" Background="#522A35"/>
+                                    </StackPanel>
+                                    </Grid>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock Grid.Row="1" Text="연결된 디스플레이 없음" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource MutedTextBrush}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasItems, ElementName=DisplayList}" Value="False">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
+
+                <Border Grid.Row="4" Margin="0,12,0,0" Padding="12,10" CornerRadius="10" Background="{StaticResource SurfaceBrush}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding SelectedItem.Name, ElementName=LibraryList, TargetNullValue=미선택, FallbackValue=미선택}"
+                                           TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectedItem.Name, ElementName=LibraryList}" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="1" Text=" → " Foreground="{StaticResource MutedTextBrush}" Margin="8,0"/>
+                                <TextBlock Grid.Column="2" Text="{Binding SelectedItem.Name, ElementName=DisplayList, TargetNullValue=미선택, FallbackValue=미선택}"
+                                           MaxWidth="140" TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectedItem.Name, ElementName=DisplayList}" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold"/>
+                            </Grid>
+                            <TextBlock x:Name="HomeStatusText" Text=""
+                                       Margin="0,4,0,0" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                                       Foreground="{StaticResource MutedTextBrush}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Text, RelativeSource={RelativeSource Self}}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock x:Name="NowPlayingText" Text="활성 월페이퍼 없음" Visibility="Collapsed"/>
+                        </StackPanel>
+                        <Button x:Name="ApplySelectedButton" Grid.Column="1" Content="선택 화면에 적용"
+                                VerticalAlignment="Center" Click="ApplySelectedButton_Click">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource ApplyWallpaperButton}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedItem, ElementName=LibraryList}" Value="{x:Null}">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Grid x:Name="WidgetsPage" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="22"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Grid>
+                    <TextBlock Text="위젯" FontSize="30" FontWeight="Bold"/>
+                    <CheckBox x:Name="WidgetsEnabledCheckBox" Content="위젯 사용"
+                              HorizontalAlignment="Right" VerticalAlignment="Center"
+                              Checked="WidgetCheckBox_Changed" Unchecked="WidgetCheckBox_Changed"/>
+                </Grid>
+
+                <ScrollViewer x:Name="WidgetsScrollViewer" Grid.Row="2"
+                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <Border Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,12">
+                                    <TextBlock Text="배치" FontSize="16" FontWeight="SemiBold"/>
+                                    <Button Content="전체 Lock" HorizontalAlignment="Right" Padding="10,5" Click="LockAllWidgets_Click"/>
+                                </Grid>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="110"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="72"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="42"/>
+                                        <RowDefinition Height="42"/>
+                                        <RowDefinition Height="42"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Column="1" Text="위치" Foreground="{StaticResource MutedTextBrush}" FontSize="11"/>
+                                    <TextBlock Grid.Column="3" Text="디스플레이" Foreground="{StaticResource MutedTextBrush}" FontSize="11"/>
+                                    <CheckBox x:Name="ClockWidgetCheckBox" Grid.Row="1" Content="시계" VerticalAlignment="Center"
+                                              Checked="WidgetCheckBox_Changed" Unchecked="WidgetCheckBox_Changed"/>
+                                    <ComboBox x:Name="ClockAnchorComboBox" Grid.Row="1" Grid.Column="1" Tag="Clock" VerticalAlignment="Center"
+                                              SelectionChanged="WidgetAnchor_Changed"/>
+                                    <ComboBox x:Name="ClockDisplayComboBox" Grid.Row="1" Grid.Column="3" Tag="Clock" VerticalAlignment="Center"
+                                              SelectionChanged="WidgetDisplay_Changed"/>
+                                    <CheckBox x:Name="ClockLockCheckBox" Grid.Row="1" Grid.Column="4" Content="Lock" Tag="Clock" Margin="12,0,0,0" VerticalAlignment="Center"
+                                              Checked="WidgetLock_Changed" Unchecked="WidgetLock_Changed"/>
+                                    <CheckBox x:Name="SystemWidgetCheckBox" Grid.Row="2" Content="시스템 정보" VerticalAlignment="Center"
+                                              Checked="WidgetCheckBox_Changed" Unchecked="WidgetCheckBox_Changed"/>
+                                    <ComboBox x:Name="SystemAnchorComboBox" Grid.Row="2" Grid.Column="1" Tag="SystemInfo" VerticalAlignment="Center"
+                                              SelectionChanged="WidgetAnchor_Changed"/>
+                                    <ComboBox x:Name="SystemDisplayComboBox" Grid.Row="2" Grid.Column="3" Tag="SystemInfo" VerticalAlignment="Center"
+                                              SelectionChanged="WidgetDisplay_Changed"/>
+                                    <CheckBox x:Name="SystemLockCheckBox" Grid.Row="2" Grid.Column="4" Content="Lock" Tag="SystemInfo" Margin="12,0,0,0" VerticalAlignment="Center"
+                                              Checked="WidgetLock_Changed" Unchecked="WidgetLock_Changed"/>
+                                    <CheckBox x:Name="CodexCompanionWidgetCheckBox" Grid.Row="3" Content="컴패니언" VerticalAlignment="Center"
+                                              Checked="WidgetCheckBox_Changed" Unchecked="WidgetCheckBox_Changed"/>
+                                    <ComboBox x:Name="CodexAnchorComboBox" Grid.Row="3" Grid.Column="1" Tag="CodexCompanion" VerticalAlignment="Center"
+                                              SelectionChanged="WidgetAnchor_Changed"/>
+                                    <ComboBox x:Name="CodexDisplayComboBox" Grid.Row="3" Grid.Column="3" Tag="CodexCompanion" VerticalAlignment="Center"
+                                              SelectionChanged="WidgetDisplay_Changed"/>
+                                    <CheckBox x:Name="CodexLockCheckBox" Grid.Row="3" Grid.Column="4" Content="Lock" Tag="CodexCompanion" Margin="12,0,0,0" VerticalAlignment="Center"
+                                              Checked="WidgetLock_Changed" Unchecked="WidgetLock_Changed"/>
+                                </Grid>
+                                <TextBlock Text="드래그로 이동 · 잡은 채 Delete로 미표시 · ↘ 크기 조절 · 우클릭 Lock · Alt+우클릭 Unlock"
+                                           Foreground="{StaticResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Margin="0,16,0,0" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18">
+                            <StackPanel>
+                                <TextBlock Text="시스템 정보 · SysDash" FontSize="18" FontWeight="SemiBold"/>
+                                <TextBlock Text="CPU·GPU·RAM은 최근 60회 측정 추이, 디스크는 사용량 막대로 표시합니다."
+                                           Foreground="{StaticResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,16"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="216"/><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <Border Background="#434A5A" CornerRadius="6" Padding="8">
+                                            <Grid>
+                                                <ContentControl x:Name="SystemInfoPreview" HorizontalContentAlignment="Center">
+                                                    <ContentControl.LayoutTransform><ScaleTransform ScaleX="0.63" ScaleY="0.63"/></ContentControl.LayoutTransform>
+                                                </ContentControl>
+                                                <TextBlock x:Name="SystemInfoEmptyPreview" Text="표시할 항목을 선택하세요." Visibility="Collapsed"
+                                                           TextWrapping="Wrap" Margin="8" FontSize="11" Foreground="White"/>
+                                            </Grid>
+                                        </Border>
+                                        <TextBlock Text="미리 보기 · 예시 수치" Foreground="{StaticResource MutedTextBrush}" FontSize="10" HorizontalAlignment="Center" Margin="0,7,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="표시 항목" FontWeight="SemiBold"/>
+                                        <WrapPanel Margin="0,8,0,14">
+                                            <CheckBox x:Name="SystemCpuCheckBox" Content="CPU" Tag="Cpu" Margin="0,0,14,8" Checked="SystemMetric_Changed" Unchecked="SystemMetric_Changed"/>
+                                            <CheckBox x:Name="SystemGpuCheckBox" Content="GPU" Tag="Gpu" Margin="0,0,14,8" Checked="SystemMetric_Changed" Unchecked="SystemMetric_Changed"/>
+                                            <CheckBox x:Name="SystemMemoryCheckBox" Content="RAM" Tag="Memory" Margin="0,0,14,8" Checked="SystemMetric_Changed" Unchecked="SystemMetric_Changed"/>
+                                            <CheckBox x:Name="SystemDriveCCheckBox" Content="C:" Tag="DriveC" Margin="0,0,14,8" Checked="SystemMetric_Changed" Unchecked="SystemMetric_Changed"/>
+                                            <CheckBox x:Name="SystemDriveDCheckBox" Content="D:" Tag="DriveD" Margin="0,0,0,8" Checked="SystemMetric_Changed" Unchecked="SystemMetric_Changed"/>
+                                        </WrapPanel>
+                                        <WrapPanel Margin="0,0,0,8">
+                                            <TextBlock Text="강조색" Width="60" VerticalAlignment="Center"/>
+                                            <Border x:Name="SystemAccentSwatch" Width="24" Height="24" CornerRadius="4" Margin="0,0,8,0" BorderBrush="#667080" BorderThickness="1"/>
+                                            <TextBox x:Name="SystemAccentColorTextBox" Width="90" MaxLength="7" VerticalContentAlignment="Center" ToolTip="#RRGGBB 색상 코드"/>
+                                            <Button Content="선택…" Tag="Accent" Click="ChooseSystemColor_Click" Padding="10,5" Margin="8,0,0,0"/>
+                                        </WrapPanel>
+                                        <WrapPanel Margin="0,0,0,8">
+                                            <TextBlock Text="글자색" Width="60" VerticalAlignment="Center"/>
+                                            <Border x:Name="SystemTextSwatch" Width="24" Height="24" CornerRadius="4" Margin="0,0,8,0" BorderBrush="#667080" BorderThickness="1"/>
+                                            <TextBox x:Name="SystemTextColorTextBox" Width="90" MaxLength="7" VerticalContentAlignment="Center" ToolTip="#RRGGBB 색상 코드"/>
+                                            <Button Content="선택…" Tag="Text" Click="ChooseSystemColor_Click" Padding="10,5" Margin="8,0,0,0"/>
+                                        </WrapPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="60,0,0,8">
+                                            <Button Content="색상 적용" Click="ApplySystemColors_Click" Padding="10,5"/>
+                                            <Button Content="기본값" Click="ResetSystemAppearance_Click" Padding="10,5" Margin="8,0,0,0"/>
+                                        </StackPanel>
+                                        <TextBlock x:Name="SystemColorStatusText" Foreground="#F2C97D" FontSize="11" TextWrapping="Wrap"/>
+                                        <WrapPanel Margin="0,6,0,8">
+                                            <TextBlock Text="크기" Width="110" VerticalAlignment="Center"/>
+                                            <ComboBox x:Name="SystemScaleComboBox" Width="150" SelectionChanged="SystemScale_Changed"/>
+                                        </WrapPanel>
+                                        <WrapPanel>
+                                            <TextBlock Text="배경 불투명도" Width="110" VerticalAlignment="Center"/>
+                                            <ComboBox x:Name="SystemOpacityComboBox" Width="150" SelectionChanged="SystemOpacity_Changed"/>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Margin="0,16,0,0" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18">
+                            <StackPanel>
+                                <TextBlock Text="스티커" FontSize="18" FontWeight="SemiBold"/>
+                                <TextBlock Text="아래 이미지를 눌러 붙이세요. 드래그로 이동하고 ↘ 손잡이로 크기, ↻ 손잡이로 회전을 조절합니다."
+                                           TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" Margin="0,6,0,14"/>
+                                <ScrollViewer MaxHeight="280" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl x:Name="StickerGallery">
+                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Tag="{Binding FileName}" Click="AddSticker_Click" Padding="6" Margin="0,0,8,8" ToolTip="{Binding Name}">
+                                                <StackPanel Width="104">
+                                                    <Image Source="{Binding Preview}" Width="96" Height="88" Stretch="Uniform"/>
+                                                    <TextBlock Text="{Binding Name}" FontSize="10" TextAlignment="Center" Margin="0,5,0,0"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                </ScrollViewer>
+                                <TextBlock x:Name="StickerEmptyHint" Text="아직 붙인 스티커가 없습니다." Foreground="{StaticResource MutedTextBrush}" Margin="0,12,0,0"/>
+                                <ListBox x:Name="StickerInstanceList" MaxHeight="160" Margin="0,12,0,12"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         SelectionChanged="StickerInstanceList_SelectionChanged">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,12,0"/>
+                                                <Button Grid.Column="1" Content="▲" Width="30" Height="26" Padding="0" Margin="0,0,6,0"
+                                                        Tag="Up" IsEnabled="{Binding CanMoveUp}" Focusable="False"
+                                                        ToolTip="앞으로 (우선순위 높이기)" Click="MoveStickerPriority_Click"/>
+                                                <Button Grid.Column="2" Content="▼" Width="30" Height="26" Padding="0"
+                                                        Tag="Down" IsEnabled="{Binding CanMoveDown}" Focusable="False"
+                                                        ToolTip="뒤로 (우선순위 낮추기)" Click="MoveStickerPriority_Click"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <StackPanel x:Name="StickerDetails">
+                                    <WrapPanel Margin="0,0,0,10">
+                                        <CheckBox x:Name="StickerVisibleCheckBox" Content="표시" Margin="0,0,18,0" VerticalAlignment="Center"
+                                                  Checked="StickerFlags_Changed" Unchecked="StickerFlags_Changed"/>
+                                        <CheckBox x:Name="StickerLockCheckBox" Content="Lock" Margin="0,0,18,0" VerticalAlignment="Center"
+                                                  Checked="StickerFlags_Changed" Unchecked="StickerFlags_Changed"/>
+                                        <ComboBox x:Name="StickerDisplayComboBox" MinWidth="160" SelectionChanged="StickerDisplay_Changed"/>
+                                        <Button Content="선택 스티커 제거" Margin="12,0,0,0" Padding="10,5" Click="RemoveSticker_Click"/>
+                                    </WrapPanel>
+                                    <WrapPanel x:Name="StickerTransformControls">
+                                        <TextBlock Text="크기" VerticalAlignment="Center"/>
+                                        <TextBox x:Name="StickerSizeTextBox" Width="70" Margin="8,0,6,0" ToolTip="48~720 · FHD 기준"/>
+                                        <TextBlock Text="px · 회전" VerticalAlignment="Center"/>
+                                        <TextBox x:Name="StickerRotationTextBox" Width="70" Margin="8,0,6,0"/>
+                                        <TextBlock Text="°" VerticalAlignment="Center"/>
+                                        <Button Content="크기·회전 적용" Margin="12,0,0,0" Padding="10,5" Click="ApplyStickerTransform_Click"/>
+                                    </WrapPanel>
+                                </StackPanel>
+                                <TextBlock x:Name="StickerStatusText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
+                                <TextBlock Text="목록 위쪽의 스티커가 앞에 표시됩니다. 우클릭으로 Lock, Alt+우클릭으로 Unlock합니다. 전체 Lock은 스티커에도 적용됩니다."
+                                           TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Margin="0,16,0,0" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18">
+                            <StackPanel>
+                                <TextBlock Text="시계 디자인" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,14"/>
+                                <WrapPanel Margin="0,0,0,12">
+                                    <TextBlock Text="시계 색상" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                    <Border x:Name="ClockColorSwatch" Width="26" Height="26" CornerRadius="6"
+                                            BorderBrush="#667080" BorderThickness="1" Margin="0,0,8,0"/>
+                                    <TextBox x:Name="ClockColorTextBox" Width="100" MaxLength="7" Text="#FFFFFF"
+                                             VerticalContentAlignment="Center" ToolTip="#RRGGBB 색상 코드"/>
+                                    <Button Content="적용" Click="ApplyClockColor_Click" Padding="12,5" Margin="8,0,0,0"/>
+                                    <Button Content="색상 선택…" Click="ChooseClockColor_Click" Padding="12,5" Margin="8,0,0,0"/>
+                                    <Button Content="기본 색상" Click="ResetClockColor_Click" Padding="12,5" Margin="8,0,0,0"/>
+                                </WrapPanel>
+                                <TextBlock x:Name="ClockColorStatusText" Foreground="#F2C97D" FontSize="11" TextWrapping="Wrap"/>
+                                <ListBox x:Name="ClockStyleList" SelectionMode="Single"
+                                         SelectionChanged="ClockStyleList_SelectionChanged"
+                                         ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListBox.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                    </ListBox.ItemsPanel>
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Width" Value="216"/>
+                                            <Setter Property="Margin" Value="0,0,10,10"/>
+                                            <Setter Property="Padding" Value="0"/>
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListBoxItem">
+                                                        <Border x:Name="ClockCard" Background="#171D2B" BorderBrush="#343D50" BorderThickness="2" CornerRadius="10">
+                                                            <ContentPresenter/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Setter TargetName="ClockCard" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="ClockCard" Property="Background" Value="#222B3D"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel>
+                                                <Border Height="128" Margin="6" CornerRadius="7" ClipToBounds="True">
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0.5,1">
+                                                            <GradientStop Color="#464F83" Offset="0"/>
+                                                            <GradientStop Color="#9D78A3" Offset="0.65"/>
+                                                            <GradientStop Color="#C2A0B4" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
+                                                    <ContentControl Content="{Binding Preview}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="{Binding Label}" HorizontalAlignment="Center" Margin="0,3,0,12" FontSize="12"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Margin="0,16,0,0" Padding="18" Background="{StaticResource SurfaceBrush}" CornerRadius="12">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Codex 상태 연결" FontWeight="SemiBold"/>
+                                    <TextBlock Text="작은 캐릭터에 작업 상태를 표시합니다. 좌클릭하면 프로젝트·사용량을 펼칩니다."
+                                               Margin="0,5,12,0" Foreground="{StaticResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="CodexBridgeStatusText" Text="자동 감지" Margin="0,5,12,0"
+                                               Foreground="{StaticResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="상세 상태 연결" Click="InstallCodexBridgeButton_Click" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <Grid x:Name="DockPage" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="22"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="Dock" FontSize="30" FontWeight="Bold"/>
+                <ScrollViewer x:Name="DockScrollViewer" Grid.Row="2"
+                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <Border Margin="0,0,0,0"
+                                Background="{StaticResource SurfaceBrush}"
+                                CornerRadius="12"
+                                Padding="22">
+                            <StackPanel>
+                                <Grid>
+                                    <StackPanel>
+                                        <TextBlock Text="Vellume Dock"
+                                                   FontSize="16"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock Text="고정 앱과 실행 중인 창을 하단 중앙에서 실행·전환합니다."
+                                                   Margin="0,5,0,0"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="11"/>
+                                    </StackPanel>
+                                    <CheckBox x:Name="DockEnabledCheckBox"
+                                              HorizontalAlignment="Right"
+                                              VerticalAlignment="Center"
+                                              Content="Dock 사용"
+                                              Checked="DockSettings_Changed"
+                                              Unchecked="DockSettings_Changed"/>
+                                </Grid>
+                                <WrapPanel Margin="0,16,0,0">
+                                    <CheckBox x:Name="DockRunningAppsCheckBox"
+                                              Content="실행 중인 앱 자동 표시"
+                                              Checked="DockSettings_Changed"
+                                              Unchecked="DockSettings_Changed"/>
+                                    <CheckBox x:Name="WindowsTaskbarVisibleCheckBox"
+                                              Content="Windows 작업표시줄 표시"
+                                              Margin="22,0,0,0"
+                                              Checked="DockSettings_Changed"
+                                              Unchecked="DockSettings_Changed"/>
+                                </WrapPanel>
+                                <Grid Margin="0,14,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="30"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="아이콘 크기"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,9,0"/>
+                                    <ComboBox x:Name="DockIconSizeComboBox"
+                                              Grid.Column="1"
+                                              SelectionChanged="DockSettings_Changed"/>
+                                    <TextBlock Grid.Column="3"
+                                               Text="하단 여백"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,9,0"/>
+                                    <ComboBox x:Name="DockBottomMarginComboBox"
+                                              Grid.Column="4"
+                                              SelectionChanged="DockSettings_Changed"/>
+                                </Grid>
+                                <TextBlock Text="Dock은 일반 앱 뒤로 내려갑니다. 필요할 때 Alt + `(숫자 1 왼쪽 키)로 앞으로 불러올 수 있습니다. 작업표시줄 표시를 끄면 Vellume 실행 중 숨겨지고 종료·비정상 종료 감지 시 복원됩니다."
+                                           Margin="0,13,0,0"
+                                           TextWrapping="Wrap"
+                                           Foreground="#F2C97D"
+                                           FontSize="11"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Margin="0,16,0,12"
+                                Background="{StaticResource SurfaceBrush}"
+                                CornerRadius="12"
+                                Padding="22">
+                            <StackPanel>
+                                <Grid>
+                                    <StackPanel>
+                                        <TextBlock Text="Dock 고정 앱"
+                                                   FontSize="16"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock x:Name="HotkeyStatusText"
+                                                   Text="Dock에서 드래그해 순서를 바꾸고, 우클릭해 고정하거나 제거할 수 있습니다."
+                                                   Margin="0,6,0,0"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="12"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal"
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Top">
+                                        <Button Content="앱 자동 찾기"
+                                                Click="DiscoverKnownAppsButton_Click"
+                                                Margin="0,0,8,0"/>
+                                        <Button Content="+ 새 그룹"
+                                                Visibility="Collapsed"
+                                                Click="AddQuickSlotGroupButton_Click"
+                                                Margin="0,0,8,0"/>
+                                        <Button Content="+ 대상 추가"
+                                                Click="AddQuickSlotButton_Click"
+                                                Background="{StaticResource AccentBrush}"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                    <TextBlock Text="기존 퀵슬롯 앱은 Dock으로 이전됩니다. 실행 중인 앱은 우클릭해 고정하고, 고정 앱은 우클릭해 Dock에서 제거할 수 있습니다."
+                                           Margin="0,15,0,12"
+                                           TextWrapping="Wrap"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           FontSize="12"/>
+                                <TextBlock x:Name="KnownAppsStatusText"
+                                               Text="설치된 주요 앱을 찾아 Dock 고정 목록에 추가합니다."
+                                           Margin="0,-5,0,12"
+                                           TextWrapping="Wrap"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           FontSize="11"/>
+
+                                <Grid Margin="0,0,0,12"
+                                      Visibility="Collapsed">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="220"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                        <TextBlock Text="대상 그룹"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,10,0"/>
+                                    <ComboBox x:Name="QuickSlotGroupComboBox"
+                                              Grid.Column="1"
+                                              DisplayMemberPath="Name"/>
+                                    <Button Grid.Column="2"
+                                                Content="선택 항목을 여기로 이동"
+                                            Click="MoveQuickSlotToGroupButton_Click"
+                                            Margin="8,0,0,0"/>
+                                    <TextBlock x:Name="LayoutStatusText"
+                                               Grid.Column="3"
+                                               Margin="12,0,0,0"
+                                               VerticalAlignment="Center"
+                                               Text="그룹 위치는 드래그가 끝날 때마다 저장됩니다."
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{StaticResource MutedTextBrush}"
+                                               FontSize="11"/>
+                                </Grid>
+
+                                <Border Margin="0,0,0,12"
+                                        Padding="13"
+                                        CornerRadius="9"
+                                        Background="#141A28"
+                                        BorderBrush="#283247"
+                                        BorderThickness="1">
+                                    <StackPanel>
+                                        <TextBlock Text="Dock 기본 항목"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock Text="Dock에 고정할 Windows 항목을 선택합니다. 휴지통은 상태가 자동 갱신되며 Dock에서 우클릭해 비울 수 있습니다."
+                                                   Margin="0,4,0,10"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="11"/>
+                                        <ItemsControl x:Name="SystemShortcutList">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Margin="0,3,0,0"
+                                                            Padding="9"
+                                                            CornerRadius="7"
+                                                            Background="#1A2131">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="170"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <CheckBox Content="{Binding Name}"
+                                                                      IsChecked="{Binding ShowInDock, Mode=TwoWay}"
+                                                                      VerticalAlignment="Center"
+                                                                      Checked="DockItemVisibility_Changed"
+                                                                      Unchecked="DockItemVisibility_Changed"/>
+                                                            <TextBlock Grid.Column="1"
+                                                                       Text="{Binding CustomIconPath}"
+                                                                       Margin="12,0"
+                                                                       VerticalAlignment="Center"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       Foreground="{StaticResource MutedTextBrush}"
+                                                                       FontSize="10"
+                                                                       ToolTip="{Binding CustomIconPath}"/>
+                                                            <StackPanel Grid.Column="2"
+                                                                        Orientation="Horizontal">
+                                                            <Button Content="아이콘 선택"
+                                                                        Tag="{Binding}"
+                                                                        Click="ChooseSystemShortcutIconButton_Click"/>
+                                                            <Button Content="Windows 아이콘 사용"
+                                                                        Tag="{Binding}"
+                                                                        Margin="7,0,0,0"
+                                                                        Click="ResetSystemShortcutIconButton_Click"/>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+
+                                <ListBox x:Name="QuickSlotList"
+                                         MinHeight="80"
+                                         MaxHeight="245"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="#171C2B"
+                                                    CornerRadius="8"
+                                                    Padding="12">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="42"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border Width="30"
+                                                            Height="30"
+                                                            CornerRadius="6"
+                                                            Background="#183A4C">
+                                                        <TextBlock Text="{Binding Slot}"
+                                                                   HorizontalAlignment="Center"
+                                                                   VerticalAlignment="Center"
+                                                                   FontFamily="Consolas"
+                                                                   FontWeight="Bold"
+                                                                   Foreground="#8FFAFF"/>
+                                                    </Border>
+                                                    <StackPanel Grid.Column="1"
+                                                                Margin="5,0,12,0"
+                                                                VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Name}"
+                                                                   FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding GroupName}"
+                                                                   Visibility="Collapsed"
+                                                                   Margin="0,2,0,0"
+                                                                   Foreground="{StaticResource AccentBrush}"
+                                                                   FontSize="10"
+                                                                   FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding TargetPath}"
+                                                                   Margin="0,3,0,0"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                                   FontSize="11"/>
+                                                    </StackPanel>
+                                                    <CheckBox Grid.Column="2"
+                                                              Content="고정"
+                                                              Margin="8,0,14,0"
+                                                              VerticalAlignment="Center"
+                                                              IsChecked="{Binding ShowInDock, Mode=TwoWay}"
+                                                              Checked="DockItemVisibility_Changed"
+                                                              Unchecked="DockItemVisibility_Changed"/>
+                                                    <Button Grid.Column="3"
+                                                            Content="삭제"
+                                                            Tag="{Binding}"
+                                                            Click="RemoveQuickSlotButton_Click"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <Grid x:Name="SettingsPage" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="22"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <StackPanel>
+                                <TextBlock Text="설정" FontSize="30" FontWeight="Bold"/>
+                                <TextBlock Text="재생 설정은 LocalAppData\Vellume에 로컬로 저장됩니다."
+                               Margin="0,7,0,0"
+                               Foreground="{StaticResource MutedTextBrush}"/>
+                    <TextBlock Text="{Binding SelectedItem.Name, ElementName=DisplayList, StringFormat=재생 설정 대상: {0}, TargetNullValue=디스플레이를 선택하세요, FallbackValue=디스플레이를 선택하세요}"
+                               Margin="0,7,0,0" Foreground="{StaticResource AccentBrush}"/>
+                </StackPanel>
+
+                <Border Grid.Row="2"
+                        Background="{StaticResource SurfaceBrush}"
+                        CornerRadius="12"
+                        Padding="24">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,0,12,0">
+                        <StackPanel>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsWallpaperApplying, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                                        <TextBlock Text="화면 맞춤" FontWeight="SemiBold" FontSize="15"/>
+                        <ComboBox x:Name="FitComboBox"
+                                  Width="220"
+                                  HorizontalAlignment="Left"
+                                  Margin="0,9,0,22"
+                                  SelectionChanged="FitComboBox_SelectionChanged"/>
+
+                        <CheckBox x:Name="MuteCheckBox"
+                                              Content="월페이퍼 소리 끄기"
+                                  Checked="MuteCheckBox_Changed"
+                                  Unchecked="MuteCheckBox_Changed"/>
+
+                        <TextBlock Margin="0,22,0,7">
+                                            <Run Text="볼륨 "/>
+                            <Run x:Name="VolumeValueText" Text="25%"/>
+                        </TextBlock>
+                        <Slider x:Name="VolumeSlider"
+                                Minimum="0"
+                                Maximum="100"
+                                TickFrequency="5"
+                                ValueChanged="VolumeSlider_ValueChanged"/>
+
+                        <CheckBox x:Name="OptimizeVideoCheckBox"
+                                  Content="영상 GPU 사용량 자동 최적화"
+                                  Margin="0,24,0,0"
+                                  Checked="OptimizeVideoCheckBox_Changed"
+                                  Unchecked="OptimizeVideoCheckBox_Changed"/>
+                        <TextBlock Text="원본은 보존하고 디스플레이 해상도에 맞는 30fps H.264 재생 캐시를 사용합니다. 첫 적용 때만 변환 시간이 필요할 수 있습니다."
+                                   Margin="24,6,0,0"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"/>
+                        </StackPanel>
+
+                        <CheckBox x:Name="RestoreCheckBox"
+                                  Content="Vellume 시작 시 마지막 월페이퍼 복원"
+                                  Margin="0,26,0,0"
+                                  Checked="RestoreCheckBox_Changed"
+                                  Unchecked="RestoreCheckBox_Changed"/>
+
+                        <CheckBox x:Name="LaunchAtLoginCheckBox"
+                                  Content="Windows 로그인 시 Vellume 자동 실행"
+                                  Margin="0,12,0,0"
+                                  Checked="LaunchAtLoginCheckBox_Changed"
+                                  Unchecked="LaunchAtLoginCheckBox_Changed"/>
+
+                                    <TextBlock Text="설정과 로그는 이 컴퓨터 밖으로 전송되지 않습니다."
+                                   Margin="0,28,0,0"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   FontSize="12"/>
+                    </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>
