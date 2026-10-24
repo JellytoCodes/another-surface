@@ -31,6 +31,7 @@ public partial class App : System.Windows.Application
     private TaskbarVisibilityController? _taskbarController;
     private Process? _sessionRecoveryGuard;
     private string? _sessionMarkerPath;
+    private string? _crashLogPath;
     private DispatcherTimer? _taskbarMaintainTimer;
     private DispatcherTimer? _previewTimer;
     private bool _skipSettingsSave;
@@ -171,15 +172,19 @@ public partial class App : System.Windows.Application
         var paths = new AppPaths();
         paths.EnsureCreated();
         _logger = new FileAppLogger(paths.LogFile);
+        _crashLogPath = Path.Combine(paths.LogDirectory, "crash.log");
+        AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
         LocalPerformanceDiagnostics.Initialize(_logger);
         await _logger.InfoAsync(
-            "Vellume 0.9.1 상주 제어부를 WPF 소프트웨어 렌더링 " +
+            "Vellume 0.9.2 상주 제어부를 WPF 소프트웨어 렌더링 " +
             "모드로 시작했습니다. 정보 위젯은 화면 한쪽당 하나의 알파 창만 " +
             "사용하고 모든 집중 작업 앱은 동일한 자동 정지 정책으로 관리합니다.");
         _settingsStore = new JsonSettingsStore(paths.SettingsFile);
         if (!isSmokeTest && !isDockPreview)
         {
             _sessionMarkerPath = paths.SessionMarkerFile;
+            if (File.Exists(_sessionMarkerPath))
+                await _logger.InfoAsync("이전 세션의 비정상 종료 표식이 남아 있습니다.");
             SessionRecoveryGuard.MarkActive(
                 _sessionMarkerPath,
                 Environment.ProcessId);
@@ -871,6 +876,20 @@ public partial class App : System.Windows.Application
 
         _singleInstanceMutex?.Dispose();
         Shutdown();
+    }
+
+    private void OnDomainUnhandledException(object sender, UnhandledExceptionEventArgs args)
+    {
+        // A background-thread exception can terminate the process without
+        // reaching WPF's dispatcher handler. Do not depend on an async logger.
+        try
+        {
+            if (_crashLogPath is not null)
+                File.AppendAllText(_crashLogPath,
+                    $"{DateTimeOffset.Now:O} pid={Environment.ProcessId} thread={Environment.CurrentManagedThreadId} " +
+                    $"terminating={args.IsTerminating}{Environment.NewLine}{args.ExceptionObject}{Environment.NewLine}");
+        }
+        catch { } // Emergency logging must not throw during process termination.
     }
 
     private async void OnDispatcherUnhandledException(

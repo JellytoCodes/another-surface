@@ -18,10 +18,14 @@ internal sealed class DesktopWidgetPointerHook : IDisposable
     private readonly Dispatcher _ui;
     private readonly Thread _thread;
     private readonly HookProc _callback;
+    private readonly HookProc _keyboardCallback;
     private readonly ManualResetEventSlim _ready = new();
     private Dispatcher? _hookDispatcher;
     private Exception? _failure;
     private nint _hook;
+    private nint _keyboardHook;
+    private Action? _deleteGesture;
+    private bool _suppressDeleteUp;
     private bool _suppressButtonUp;
     private Target? _clickTarget;
     private NativeMethods.Point _clickStart;
@@ -33,6 +37,7 @@ internal sealed class DesktopWidgetPointerHook : IDisposable
     {
         _ui = ui;
         _callback = OnMouse;
+        _keyboardCallback = OnKeyboard;
         _thread = new Thread(Run) { IsBackground = true, Name = "Vellume desktop widget shortcuts" };
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
@@ -50,6 +55,26 @@ internal sealed class DesktopWidgetPointerHook : IDisposable
 
     internal void ObservePrimaryPress(Action<int, int>? observer)
         => Volatile.Write(ref _primaryPressObserver, observer);
+
+    internal void SetDeleteGesture(Action? hide) => Volatile.Write(ref _deleteGesture, hide);
+
+    internal bool HandleDeleteKey(bool down, bool leftButtonHeld)
+    {
+        if (!down)
+        {
+            var suppress = _suppressDeleteUp;
+            _suppressDeleteUp = false;
+            return suppress;
+        }
+        if (_suppressDeleteUp) return true; // Swallow repeats until the matching key-up.
+        if (!leftButtonHeld || _disposed || _ui.HasShutdownStarted) return false;
+        var hide = Interlocked.Exchange(ref _deleteGesture, null);
+        if (hide is null) return false;
+        try { _ui.BeginInvoke(DispatcherPriority.Input, new Action(() => { if (!_disposed) hide(); })); }
+        catch (InvalidOperationException) { return false; }
+        _suppressDeleteUp = true;
+        return true;
+    }
 
     // Shared by the actual hook and the regression tests. A covering app always
     // wins; a locked widget only responds to Alt on a visible, painted pixel.
@@ -99,6 +124,7 @@ internal sealed class DesktopWidgetPointerHook : IDisposable
         if (_disposed) return;
         _disposed = true;
         Volatile.Write(ref _primaryPressObserver, null);
+        Volatile.Write(ref _deleteGesture, null);
         Volatile.Write(ref _snapshot, new Snapshot([], []));
         _hookDispatcher?.BeginInvokeShutdown(DispatcherPriority.Send);
         if (_thread != Thread.CurrentThread && _thread.Join(TimeSpan.FromSeconds(2))) _ready.Dispose();
@@ -111,11 +137,29 @@ internal sealed class DesktopWidgetPointerHook : IDisposable
             _hookDispatcher = Dispatcher.CurrentDispatcher;
             _hook = SetWindowsHookExW(14, _callback, NativeMethods.GetModuleHandleW(null), 0); // WH_MOUSE_LL
             if (_hook == nint.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
+            _keyboardHook = SetWindowsHookExW(13, _keyboardCallback, NativeMethods.GetModuleHandleW(null), 0); // WH_KEYBOARD_LL
+            if (_keyboardHook == nint.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
         }
         catch (Exception exception) { _failure = exception; }
         finally { _ready.Set(); }
         try { if (_failure is null && !_disposed) Dispatcher.Run(); }
-        finally { if (_hook != nint.Zero) UnhookWindowsHookEx(_hook); }
+        finally
+        {
+            if (_hook != nint.Zero) UnhookWindowsHookEx(_hook);
+            if (_keyboardHook != nint.Zero) UnhookWindowsHookEx(_keyboardHook);
+        }
+    }
+
+    private nint OnKeyboard(int code, nint message, nint data)
+    {
+        if (code >= 0 && !_disposed && Marshal.ReadInt32(data) == 0x2E) // VK_DELETE
+        {
+            var down = message == 0x0100 || message == 0x0104;
+            if ((down || message == 0x0101 || message == 0x0105) &&
+                HandleDeleteKey(down, (GetAsyncKeyState(0x01) & 0x8000) != 0))
+                return new nint(1);
+        }
+        return CallNextHookEx(_keyboardHook, code, message, data);
     }
 
     private nint OnMouse(int code, nint message, nint data)

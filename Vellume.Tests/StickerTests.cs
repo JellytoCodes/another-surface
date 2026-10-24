@@ -258,6 +258,61 @@ public sealed class StickerTests
             finally { NativeMethods.DestroyWindow(root); }
         }));
 
+    [Fact]
+    [Trait("Category", "LocalIntegration")]
+    public void HideSticker_PreservesRecordTransformAndLayer_AndCanBeRestored()
+        => RunOnSta(() => WithRenderer((renderer, display) =>
+        {
+            var sticker = new StickerItem { AssetName = StickerCatalog.All[0].FileName, Size = 279, Rotation = -28,
+                Placement = WidgetPlacement.FromAnchor(WidgetAnchor.Center, true) };
+            var settings = EmptyWidgets();
+            settings.Stickers = [sticker];
+            Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
+            StickerChangedEventArgs? hidden = null;
+            renderer.StickerChanged += (_, args) => { if (args.IsVisibilityChange) hidden = args; };
+            renderer.HideSticker(sticker.Id);
+            Assert.Null(hidden);
+            Assert.Single(renderer.PanelHandles);
+            renderer.SetStickerLocked(sticker.Id, false);
+            renderer.MoveSticker(sticker.Id, display.X + 80, display.Y + 100, false);
+            renderer.HideSticker(sticker.Id);
+            Assert.NotNull(hidden);
+            Assert.False(hidden!.Sticker.IsVisible);
+            Assert.Equal(sticker.Id, hidden.Sticker.Id);
+            Assert.Equal(279, hidden.Sticker.Size);
+            Assert.Equal(-28, hidden.Sticker.Rotation);
+            Assert.Empty(renderer.PanelHandles);
+            settings.Stickers[0] = hidden.Sticker.Copy();
+            Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
+            Assert.Empty(renderer.PanelHandles);
+            settings.Stickers[0].IsVisible = true;
+            Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
+            Assert.Single(renderer.PanelHandles);
+        }));
+
+    [Fact]
+    [Trait("Category", "LocalIntegration")]
+    public void DeleteKey_IsScopedToAnActiveLeftDrag_AndConsumesRepeatsOnlyOnce()
+        => RunOnSta(() =>
+        {
+            var dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
+            using var hook = new DesktopWidgetPointerHook(dispatcher);
+            var hidden = 0;
+            Assert.False(hook.HandleDeleteKey(true, true));
+            hook.SetDeleteGesture(() => hidden++);
+            Assert.False(hook.HandleDeleteKey(true, false));
+            Assert.True(hook.HandleDeleteKey(true, true));
+            Assert.True(hook.HandleDeleteKey(true, true));
+            Assert.True(hook.HandleDeleteKey(false, false));
+            dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
+            Assert.Equal(1, hidden);
+            Assert.False(hook.HandleDeleteKey(true, true));
+            hook.SetDeleteGesture(() => hidden++);
+            hook.SetDeleteGesture(null); // Releasing the mouse or losing capture cancels the shortcut.
+            Assert.False(hook.HandleDeleteKey(true, true));
+            Assert.False(hook.HandleDeleteKey(false, false));
+        });
+
     private static WidgetSettings EmptyWidgets() => new()
         { ShowClock = false, ShowSystemInfo = false, ShowCodexCompanion = false };
 

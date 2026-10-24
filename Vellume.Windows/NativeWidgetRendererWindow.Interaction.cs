@@ -11,6 +11,9 @@ internal sealed partial class NativeWidgetRendererWindow
     {
         var initialScale = _settings.GetScale(state.Kind);
         state.Editor = new WidgetEditingOverlayWindow(state.Kind);
+        var editor = state.Editor;
+        editor.MoveDragStateChanged += active => _pointerHook?.SetDeleteGesture(active ? editor.DeleteDuringMove : null);
+        editor.DeleteRequested += () => HideWidget(state.Kind);
         state.Editor.DragPositionChanged += MoveWidget;
         if (state.Kind == WidgetKind.CodexCompanion) state.Editor.Clicked += ToggleCodexDetails;
         state.Editor.TransformStarted += () =>
@@ -28,6 +31,9 @@ internal sealed partial class NativeWidgetRendererWindow
         var initialRotation = state.Item.Rotation;
         var id = state.Item.Id;
         state.Editor = new WidgetEditingOverlayWindow($"Vellume Sticker {StickerCatalog.Find(state.Item.AssetName)?.Name}", true);
+        var editor = state.Editor;
+        editor.MoveDragStateChanged += active => _pointerHook?.SetDeleteGesture(active ? editor.DeleteDuringMove : null);
+        editor.DeleteRequested += () => HideSticker(id);
         state.Editor.PositionChanged += (x, y, completed) => MoveSticker(id, x, y, completed);
         state.Editor.TransformStarted += () => { initialSize = state.Item.Size; initialRotation = state.Item.Rotation; };
         state.Editor.TransformChanged += (factor, angle, completed) => TransformSticker(id, initialSize * factor, initialRotation + angle, completed);
@@ -69,6 +75,42 @@ internal sealed partial class NativeWidgetRendererWindow
         state.Editor?.SetBounds(_interactiveHostHandle, state.X, state.Y, prepared.Width, prepared.Height, _isWindowVisible);
         RefreshPointerTargets();
         if (completed) PlacementChanged?.Invoke(this, new WidgetPlacementChangedEventArgs(kind, placement, _settings.GetScale(kind)));
+    }
+
+    internal void HideWidget(WidgetKind kind)
+    {
+        if (_disposed || !_widgetHosts.TryGetValue(kind, out var state) || _settings.GetPlacement(kind).IsLocked) return;
+        var display = state.Display;
+        var resolutionScale = CalculateResolutionScale(display.Width, display.Height);
+        var scale = _settings.GetScale(kind);
+        var placement = WidgetPlacementLayout.FromPosition(state.X - display.X, state.Y - display.Y,
+            display.Width, display.Height, Math.Ceiling(state.NaturalWidth * resolutionScale * scale),
+            Math.Ceiling(state.NaturalHeight * resolutionScale * scale), 24 * resolutionScale, isLocked: false, displayId: display.Id);
+        _settings.SetPlacement(kind, placement);
+        _settings.SetVisible(kind, false);
+        RebuildAlphaPanels();
+        ApplyLastMetrics();
+        ApplyLastCodex();
+        UpdateClockTimer();
+        PlacementChanged?.Invoke(this, new WidgetPlacementChangedEventArgs(kind, placement, scale, isVisible: false));
+    }
+
+    internal void HideSticker(string id)
+    {
+        if (_disposed || !_stickerHosts.TryGetValue(id, out var state) || state.Item.Placement.IsLocked) return;
+        var index = _settings.Stickers.FindIndex(item => item.Id == id);
+        if (index < 0) return;
+        var item = state.Item.Copy();
+        var side = GetStickerPixelSize(item, state.Display);
+        item.Placement = WidgetPlacementLayout.FromPosition(state.X - state.Display.X, state.Y - state.Display.Y,
+            state.Display.Width, state.Display.Height, side, side, isLocked: false, displayId: state.Display.Id);
+        item.IsVisible = false;
+        _settings.Stickers[index] = item;
+        RebuildAlphaPanels();
+        ApplyLastMetrics();
+        ApplyLastCodex();
+        UpdateClockTimer();
+        StickerChanged?.Invoke(this, new StickerChangedEventArgs(item, isVisibilityChange: true));
     }
 
     internal void SetWidgetLocked(WidgetKind kind, bool locked)

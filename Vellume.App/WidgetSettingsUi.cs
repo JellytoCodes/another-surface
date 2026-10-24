@@ -86,6 +86,9 @@ public partial class MainWindow
         _updatingWidgetControls = true;
         try
         {
+            ClockWidgetCheckBox.IsChecked = _settings.Widgets.ShowClock;
+            SystemWidgetCheckBox.IsChecked = _settings.Widgets.ShowSystemInfo;
+            CodexCompanionWidgetCheckBox.IsChecked = _settings.Widgets.ShowCodexCompanion;
             var clockColor = WidgetSettings.NormalizeClockColor(_settings.Widgets.ClockColor);
             ClockColorTextBox.Text = clockColor;
             ClockColorSwatch.Background = new SolidColorBrush(
@@ -303,6 +306,7 @@ public partial class MainWindow
             if (!args.IsLockChange) placement.IsLocked = _settings.Widgets.GetPlacement(args.Kind).IsLocked;
             _settings.Widgets.SetPlacement(args.Kind, placement);
             if (args.Scale is { } scale) _settings.Widgets.SetScale(args.Kind, scale);
+            if (args.IsVisible is { } visible) _settings.Widgets.SetVisible(args.Kind, visible);
             RefreshWidgetPlacementControls();
             await SaveAndRefreshWidgetsCoreAsync();
         }

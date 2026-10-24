@@ -859,6 +859,7 @@ public sealed class WallpaperController : IWallpaperController, IAsyncDisposable
 			return;
 		}
 		_widgetSettings.SetPlacement(eventArgs.Kind, eventArgs.Placement);
+        if (eventArgs.IsVisible is { } visible) _widgetSettings.SetVisible(eventArgs.Kind, visible);
         if (eventArgs.Scale is { } scale) _widgetSettings.SetScale(eventArgs.Kind, scale);
 		WidgetPlacementChanged?.Invoke(this, eventArgs);
 	}

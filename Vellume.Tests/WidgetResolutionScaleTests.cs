@@ -366,6 +366,50 @@ public sealed class WidgetResolutionScaleTests
             finally { Assert.True(renderer.CloseSafelyAsync().IsCompletedSuccessfully); }
         }));
 
+    [Theory]
+    [InlineData(WidgetKind.Clock)]
+    [InlineData(WidgetKind.SystemInfo)]
+    [InlineData(WidgetKind.CodexCompanion)]
+    [Trait("Category", "LocalIntegration")]
+    public void HideWidget_PreservesDraggedPlacementAndScale_AndCanBeRestored(WidgetKind kind)
+        => RunOnStaThread(() => RunWithOffscreenParent(parent =>
+        {
+            var renderer = new NativeWidgetRendererWindow();
+            renderer.SetWindowVisible(false);
+            try
+            {
+                var settings = new WidgetSettings { ShowClock = kind == WidgetKind.Clock,
+                    ShowSystemInfo = kind == WidgetKind.SystemInfo, ShowCodexCompanion = kind == WidgetKind.CodexCompanion };
+                settings.SetScale(kind, 1.137);
+                Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
+                var display = CreateDisplay(1920, 1080);
+                renderer.AttachTo(parent, display);
+                Assert.True(renderer.InitializeAsync(CancellationToken.None).IsCompletedSuccessfully);
+                WidgetPlacementChangedEventArgs? hidden = null;
+                renderer.PlacementChanged += (_, args) => { if (args.IsVisible == false) hidden = args; };
+                renderer.HideWidget(kind); // Locked widgets cannot be hidden by this gesture.
+                Assert.Null(hidden);
+                Assert.Single(renderer.PanelHandles);
+                renderer.SetWidgetLocked(kind, false);
+                renderer.MoveWidget(kind, display.X + 120, display.Y + 140, false);
+                renderer.HideWidget(kind);
+                Assert.NotNull(hidden);
+                Assert.Equal(1.137, hidden!.Scale);
+                Assert.Equal(WidgetAnchor.Custom, hidden.Placement.Anchor);
+                Assert.Empty(renderer.PanelHandles);
+                settings.SetVisible(kind, false);
+                settings.SetPlacement(kind, hidden.Placement);
+                Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
+                Assert.Empty(renderer.PanelHandles);
+                settings.SetVisible(kind, true);
+                Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
+                var bounds = ReadPhysicalBounds(Assert.Single(renderer.PanelHandles));
+                Assert.InRange(bounds.Left - display.X, 119, 121);
+                Assert.InRange(bounds.Top - display.Y, 139, 141);
+            }
+            finally { Assert.True(renderer.CloseSafelyAsync().IsCompletedSuccessfully); }
+        }));
+
     private static void AssertScaled(
         int actual,
         double reference,

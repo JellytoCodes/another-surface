@@ -635,6 +635,16 @@ public sealed class WidgetSettings
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
 
+    public void SetVisible(WidgetKind kind, bool visible)
+    {
+        switch (kind)
+        {
+            case WidgetKind.Clock: ShowClock = visible; break;
+            case WidgetKind.SystemInfo: ShowSystemInfo = visible; break;
+            case WidgetKind.CodexCompanion: ShowCodexCompanion = visible; break;
+        }
+    }
+
     public double GetScale(WidgetKind kind) => NormalizeWidgetScale(kind switch
     {
         WidgetKind.Clock => ClockScale,

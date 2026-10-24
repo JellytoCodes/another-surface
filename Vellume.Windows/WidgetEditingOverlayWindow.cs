@@ -103,6 +103,17 @@ internal sealed class WidgetEditingOverlayWindow : Window
     internal event Action? TransformStarted;
     internal event Action<double, double, bool>? TransformChanged;
     internal event Action? Clicked;
+    internal event Action<bool>? MoveDragStateChanged;
+    internal event Action? DeleteRequested;
+
+    internal void DeleteDuringMove()
+    {
+        if (!_dragging || _transformMode != 0) return;
+        _dragging = false;
+        MoveDragStateChanged?.Invoke(false);
+        _frame.ReleaseMouseCapture();
+        DeleteRequested?.Invoke();
+    }
 
     private void AddTransformHandle(Grid root, string text, string tooltip, int mode,
         System.Windows.HorizontalAlignment horizontal, VerticalAlignment vertical, System.Windows.Input.Cursor cursor)
@@ -119,6 +130,7 @@ internal sealed class WidgetEditingOverlayWindow : Window
         {
             if (!GetPhysicalCursorPos(out _startCursor)) return;
             _transformMode = mode;
+            MoveDragStateChanged?.Invoke(false);
             _resizeStartWidth = _pixelWidth;
             _resizeStartHeight = _pixelHeight;
             _centerX = _x + _pixelWidth / 2d;
@@ -174,6 +186,7 @@ internal sealed class WidgetEditingOverlayWindow : Window
         if (!visible && _dragging)
         {
             _dragging = false;
+            MoveDragStateChanged?.Invoke(false);
             _frame.ReleaseMouseCapture();
             RaiseChange(true);
         }
@@ -207,12 +220,15 @@ internal sealed class WidgetEditingOverlayWindow : Window
             return;
         }
         _dragging = false;
+        MoveDragStateChanged?.Invoke(false);
         _frame.ReleaseMouseCapture();
         DragPositionChanged = null;
         PositionChanged = null;
         TransformStarted = null;
         TransformChanged = null;
         Clicked = null;
+        MoveDragStateChanged = null;
+        DeleteRequested = null;
         Close();
     }
 
@@ -229,6 +245,7 @@ internal sealed class WidgetEditingOverlayWindow : Window
         _requestedY = _y;
         _moved = false;
         _dragging = _frame.CaptureMouse();
+        MoveDragStateChanged?.Invoke(_dragging);
         e.Handled = true;
     }
 
@@ -264,6 +281,7 @@ internal sealed class WidgetEditingOverlayWindow : Window
             return;
         }
         _dragging = false;
+        MoveDragStateChanged?.Invoke(false);
         _frame.ReleaseMouseCapture();
         if (_transformMode == 0 && !_moved) Clicked?.Invoke();
         else RaiseChange(true);
@@ -275,6 +293,7 @@ internal sealed class WidgetEditingOverlayWindow : Window
         if (_dragging)
         {
             _dragging = false;
+            MoveDragStateChanged?.Invoke(false);
             if (_transformMode != 0 || _moved) RaiseChange(true);
         }
     }

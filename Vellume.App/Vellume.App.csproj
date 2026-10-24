@@ -17,9 +17,9 @@
     <!-- WPF owns startup; WinForms is used only for tray/dialog integration.
          DPI must be declared before WPF creates HWNDs, not via WinForms startup. -->
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
-    <Version>0.9.1</Version>
-    <FileVersion>0.9.1.0</FileVersion>
-    <AssemblyVersion>0.9.1.0</AssemblyVersion>
+    <Version>0.9.2</Version>
+    <FileVersion>0.9.2.0</FileVersion>
+    <AssemblyVersion>0.9.2.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>

@@ -184,10 +184,10 @@ public partial class MainWindow
             Dispatcher.BeginInvoke(new Action(() => WallpaperController_StickerChanged(sender, args)));
             return;
         }
-        _ = PersistStickerAsync(args.Sticker, args.IsLockChange, AdvanceStickerRevision(args.Sticker.Id));
+        _ = PersistStickerAsync(args.Sticker, args.IsLockChange, args.IsVisibilityChange, AdvanceStickerRevision(args.Sticker.Id));
     }
 
-    private async Task PersistStickerAsync(StickerItem edited, bool isLockChange, long revision)
+    private async Task PersistStickerAsync(StickerItem edited, bool isLockChange, bool isVisibilityChange, long revision)
     {
         var entered = false;
         try
@@ -200,7 +200,7 @@ public partial class MainWindow
             if (index < 0 || (!isLockChange && _settings.Widgets.Stickers[index].Placement.IsLocked)) return;
             var current = _settings.Widgets.Stickers[index];
             var next = edited.Copy();
-            next.IsVisible = current.IsVisible;
+            if (!isVisibilityChange) next.IsVisible = current.IsVisible;
             if (!isLockChange) next.Placement.IsLocked = current.Placement.IsLocked;
             _settings.Widgets.Stickers[index] = next;
             RefreshStickerControls();

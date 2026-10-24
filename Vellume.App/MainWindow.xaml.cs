@@ -2193,6 +2193,9 @@ public partial class MainWindow : Window
         object sender,
         RoutedEventArgs eventArgs)
     {
+        WidgetKind? changedKind = ReferenceEquals(sender, ClockWidgetCheckBox) ? WidgetKind.Clock :
+            ReferenceEquals(sender, SystemWidgetCheckBox) ? WidgetKind.SystemInfo :
+            ReferenceEquals(sender, CodexCompanionWidgetCheckBox) ? WidgetKind.CodexCompanion : null;
         await CommitWidgetControlChangeAsync(() =>
         {
             _settings.Widgets.IsEnabled =
@@ -2204,7 +2207,7 @@ public partial class MainWindow : Window
             _settings.Widgets.ShowQuickSlots = false;
             _settings.Widgets.ShowCodexCompanion =
                 CodexCompanionWidgetCheckBox.IsChecked == true;
-        });
+        }, changedKind);
     }
 
     private async void GridSettings_Changed(

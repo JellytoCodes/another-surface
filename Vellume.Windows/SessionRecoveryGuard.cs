@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 
 namespace Vellume.Windows;
 
@@ -72,8 +73,9 @@ public static class SessionRecoveryGuard
         {
             return Process.Start(startInfo);
         }
-        catch
+        catch (Exception exception)
         {
+            WriteDiagnostic(markerPath, $"guard start failed: {exception}");
             return null;
         }
     }
@@ -83,20 +85,29 @@ public static class SessionRecoveryGuard
         string markerPath,
         int recoveryAttempt)
     {
+        WriteDiagnostic(markerPath, $"watching owner={ownerProcessId} guard={Environment.ProcessId} attempt={recoveryAttempt} executable={Environment.ProcessPath}");
+        int? exitCode = null;
         try
         {
             using var owner = Process.GetProcessById(ownerProcessId);
+            var ownerHandle = owner.Handle;
             owner.WaitForExit();
+            // A process attached by ID does not reliably expose Process.ExitCode.
+            // Keep its OS handle alive through the wait and query that handle.
+            if (GetExitCodeProcess(ownerHandle, out var nativeExitCode)) exitCode = unchecked((int)nativeExitCode);
         }
-        catch
+        catch (Exception exception)
         {
+            WriteDiagnostic(markerPath, $"owner wait failed: {exception}");
             // If the owner already exited, recovery should run immediately.
         }
 
         TaskbarVisibilityController.RestoreAllTaskbars();
-        if (!ConsumeMarker(markerPath, ownerProcessId) ||
-            recoveryAttempt > 0)
+        var consumed = ConsumeMarker(markerPath, ownerProcessId);
+        WriteDiagnostic(markerPath, $"owner={ownerProcessId} exited code={(exitCode is { } code ? $"0x{unchecked((uint)code):X8}" : "unavailable")} abnormalMarker={consumed} attempt={recoveryAttempt}");
+        if (!consumed || recoveryAttempt > 0)
         {
+            WriteDiagnostic(markerPath, "recovery skipped: clean exit or recovery already attempted");
             return false;
         }
 
@@ -104,6 +115,7 @@ public static class SessionRecoveryGuard
         if (string.IsNullOrWhiteSpace(executable) ||
             !File.Exists(executable))
         {
+            WriteDiagnostic(markerPath, "recovery skipped: executable unavailable");
             return false;
         }
 
@@ -117,13 +129,32 @@ public static class SessionRecoveryGuard
         startInfo.ArgumentList.Add("--recovered-session");
         try
         {
-            return Process.Start(startInfo) is not null;
+            using var recovered = Process.Start(startInfo);
+            WriteDiagnostic(markerPath, $"recovery started pid={recovered?.Id}");
+            return recovered is not null;
         }
-        catch
+        catch (Exception exception)
         {
+            WriteDiagnostic(markerPath, $"recovery failed: {exception}");
             return false;
         }
     }
+
+    private static void WriteDiagnostic(string markerPath, string message)
+    {
+        try
+        {
+            var directory = Path.Combine(Path.GetDirectoryName(markerPath)!, "Logs");
+            Directory.CreateDirectory(directory);
+            File.AppendAllText(Path.Combine(directory, "session-guard.log"),
+                $"{DateTimeOffset.Now:O} {message}{Environment.NewLine}");
+        }
+        catch { } // Diagnostics must not disable session recovery.
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetExitCodeProcess(nint process, out uint exitCode);
 
     private static bool ConsumeMarker(
         string markerPath,
