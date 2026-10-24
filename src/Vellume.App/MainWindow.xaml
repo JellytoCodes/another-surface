@@ -34,7 +34,7 @@
                                FontSize="22"
                                FontWeight="Bold"
                                Foreground="{StaticResource AccentBrush}"/>
-                    <TextBlock Text="라이브 데스크톱 · 0.9.2"
+                    <TextBlock x:Name="VersionText"
                                Margin="0,4,0,0"
                                Foreground="{StaticResource MutedTextBrush}"
                                FontSize="12"/>

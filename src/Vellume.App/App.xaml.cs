@@ -176,9 +176,8 @@ public partial class App : System.Windows.Application
         AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
         LocalPerformanceDiagnostics.Initialize(_logger);
         await _logger.InfoAsync(
-            "Vellume 0.9.2 상주 제어부를 WPF 소프트웨어 렌더링 " +
-            "모드로 시작했습니다. 정보 위젯은 화면 한쪽당 하나의 알파 창만 " +
-            "사용하고 모든 집중 작업 앱은 동일한 자동 정지 정책으로 관리합니다.");
+            $"Vellume {typeof(App).Assembly.GetName().Version?.ToString(3)}을 시작했습니다. " +
+            "상주 제어부는 WPF 소프트웨어 렌더링을 사용하고 월페이퍼는 별도 프로세스로 재생합니다.");
         _settingsStore = new JsonSettingsStore(paths.SettingsFile);
         if (!isSmokeTest && !isDockPreview)
         {

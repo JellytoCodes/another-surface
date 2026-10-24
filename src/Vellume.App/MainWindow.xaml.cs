@@ -82,6 +82,7 @@ public partial class MainWindow : Window
         WindowsStartupRegistrationService startupRegistrationService)
     {
         InitializeComponent();
+        VersionText.Text = $"라이브 데스크톱 · {typeof(App).Assembly.GetName().Version?.ToString(3)}";
         _quickSlotRuntimeTimer = new DispatcherTimer(
             DispatcherPriority.Background)
         {
