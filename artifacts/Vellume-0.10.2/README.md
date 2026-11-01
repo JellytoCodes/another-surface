@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="src/Vellume.App/Assets/Brand/vellume-dock-icon-v3.png" width="112" alt="Vellume 아이콘" />
+  <img src="src/Vellume.App/Assets/Brand/vellume-dock-icon-v3.png" width="112" alt="초미 Vellume 아이콘" />
 </p>
 <h1 align="center">Vellume</h1>
 <p align="center">
   <strong>월페이퍼, 위젯, Dock을 한곳에서 관리하는 Windows 데스크톱 앱</strong><br />
-  0.10.1 · Windows x64 · C# / WPF + C++20
+  0.10.2 · Windows x64 · C# / WPF + C++20
 </p>
 
 Vellume은 로컬 이미지와 영상을 바탕화면에 적용하고, 시계·시스템 정보·앱 실행 Dock을 함께 구성하는 데스크톱 커스터마이징 앱입니다. 설정과 앱 수명 주기는 WPF가 담당하고, 이미지·영상 월페이퍼는 별도 C++ 렌더러를 우선 사용합니다.
@@ -38,7 +38,7 @@ Vellume은 로컬 이미지와 영상을 바탕화면에 적용하고, 시계·�
 
 일반 실행에는 관리자 권한이 필요하지 않습니다. 영상 재생 가능 여부는 파일의 코덱과 Windows 미디어 환경에 따라 달라집니다.
 
-[최신 GitHub Release](https://github.com/JellytoCodes/Vellume/releases/latest)의 `Vellume-0.10.1-win-x64.zip`을 다운로드해 압축을 풉니다. 저장소에 동봉된 실행 파일은 [`artifacts/Vellume-0.10.1/`](artifacts/Vellume-0.10.1/)에 있습니다. EXE만 분리하지 말고 DLL·Assets·네이티브 렌더러를 포함한 폴더 전체를 유지한 상태로 `Vellume.App.exe`를 실행합니다. `BuildInfo.json`에서 배포본의 소스 커밋과 파일 해시를 확인할 수 있습니다.
+[최신 GitHub Release](https://github.com/JellytoCodes/Vellume/releases/latest)의 `Vellume-0.10.2-win-x64.zip`을 다운로드해 압축을 풉니다. 저장소에 동봉된 실행 파일은 [`artifacts/Vellume-0.10.2/`](artifacts/Vellume-0.10.2/)에 있습니다. EXE만 분리하지 말고 DLL·Assets·네이티브 렌더러를 포함한 폴더 전체를 유지한 상태로 `Vellume.App.exe`를 실행합니다. `BuildInfo.json`에서 배포본의 소스 커밋과 파일 해시를 확인할 수 있습니다.
 
 ### 기본 사용 흐름
 
@@ -89,7 +89,7 @@ dotnet restore .\tests\Vellume.Tests\Vellume.Tests.csproj
 
 [`scripts/build-release.ps1`](scripts/build-release.ps1)은 **C++ 네이티브 렌더러 → WPF 앱 → 테스트** 순서로 실행합니다. 필요한 NuGet 패키지는 자동 복원합니다. 네이티브 EXE는 앱 출력 폴더에 복사됩니다.
 
-배포 폴더까지 갱신할 때는 Vellume을 종료하고 `.\scripts\build-release.ps1 -Package`를 실행합니다. 빌드·테스트 성공 후 기존 배포본을 `.work/tmp/`에 백업하고 `artifacts/Vellume-0.10.1/` 전체를 교체합니다. `BuildInfo.json`에 소스 커밋과 SHA-256을 기록하고 복사된 파일을 검증합니다.
+배포 폴더까지 갱신할 때는 Vellume을 종료하고 `.\scripts\build-release.ps1 -Package`를 실행합니다. 빌드·테스트 성공 후 기존 배포본을 `.work/tmp/`에 백업하고 `artifacts/Vellume-0.10.2/` 전체를 교체합니다. `BuildInfo.json`에 소스 커밋과 SHA-256을 기록하고 복사된 파일을 검증합니다.
 
 빌드가 성공한 다음 실행합니다.
 
