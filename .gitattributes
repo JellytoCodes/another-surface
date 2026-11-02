@@ -2,4 +2,4 @@
 * text=auto
 
 # Preserve published bytes for BuildInfo SHA-256 verification.
-artifacts/** -text
+artifacts/** -text whitespace=cr-at-eol
