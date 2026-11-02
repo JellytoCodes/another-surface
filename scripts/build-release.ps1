@@ -26,7 +26,7 @@ if ([string]::IsNullOrWhiteSpace($msbuild)) {
 }
 
 $nativeProject = Join-Path $projectRoot `
-    "src\Vellume.Renderer.Native\Vellume.Renderer.Native.vcxproj"
+    "src\AnotherSurface.Renderer.Native\AnotherSurface.Renderer.Native.vcxproj"
 $pathRows = @(& cmd.exe /d /c "set path") |
     Where-Object { $_ -match '^(?i:path)=' }
 if ($pathRows.Count -gt 1) {
@@ -53,43 +53,43 @@ $fxc = Get-ChildItem -LiteralPath (Join-Path ${env:ProgramFiles(x86)} 'Windows K
     Where-Object FullName -Match '\\x64\\' | Sort-Object FullName | Select-Object -Last 1 -ExpandProperty FullName
 if (-not $fxc) { throw 'Windows SDK의 x64 HLSL 컴파일러(fxc.exe)를 찾을 수 없습니다.' }
 & $fxc /nologo /T ps_2_0 /E main /O3 `
-    /Fo (Join-Path $projectRoot 'src\Vellume.Windows\Shaders\VideoColor.ps') `
-    (Join-Path $projectRoot 'src\Vellume.Windows\Shaders\VideoColor.hlsl')
+    /Fo (Join-Path $projectRoot 'src\AnotherSurface.Windows\Shaders\VideoColor.ps') `
+    (Join-Path $projectRoot 'src\AnotherSurface.Windows\Shaders\VideoColor.hlsl')
 if ($LASTEXITCODE -ne 0) { throw '영상 색상 셰이더 빌드에 실패했습니다.' }
 
 dotnet build `
-    (Join-Path $projectRoot "src\Vellume.App\Vellume.App.csproj") `
+    (Join-Path $projectRoot "src\AnotherSurface.App\AnotherSurface.App.csproj") `
     -c $Configuration `
     --disable-build-servers `
     -m:1
 if ($LASTEXITCODE -ne 0) {
-    throw "Vellume 앱 빌드에 실패했습니다."
+    throw "Another Surface 앱 빌드에 실패했습니다."
 }
 
 if (-not $SkipTests) {
     dotnet test `
-        (Join-Path $projectRoot "tests\Vellume.Tests\Vellume.Tests.csproj") `
+        (Join-Path $projectRoot "tests\AnotherSurface.Tests\AnotherSurface.Tests.csproj") `
         -c $Configuration `
         --disable-build-servers `
         -m:1
     if ($LASTEXITCODE -ne 0) {
-        throw "Vellume 테스트에 실패했습니다."
+        throw "Another Surface 테스트에 실패했습니다."
     }
 }
 
 if ($Package) {
-    $running = Get-Process Vellume.App,Vellume.Renderer.Native -ErrorAction SilentlyContinue
+    $running = Get-Process AnotherSurface.App,AnotherSurface.Renderer.Native -ErrorAction SilentlyContinue
     if ($running) {
-        throw "배포 폴더를 갱신하기 전에 Vellume을 종료하세요."
+        throw "배포 폴더를 갱신하기 전에 Another Surface를 종료하세요."
     }
-    [xml]$appProject = Get-Content -LiteralPath (Join-Path $projectRoot "src\Vellume.App\Vellume.App.csproj")
+    [xml]$appProject = Get-Content -LiteralPath (Join-Path $projectRoot "src\AnotherSurface.App\AnotherSurface.App.csproj")
     $version = $appProject.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
-    $output = Join-Path $projectRoot "src\Vellume.App\bin\$Configuration\net8.0-windows10.0.17763.0"
+    $output = Join-Path $projectRoot "src\AnotherSurface.App\bin\$Configuration\net8.0-windows10.0.17763.0"
     $packageRoot = Join-Path $projectRoot "artifacts"
-    $packageDirectory = Join-Path $packageRoot "Vellume-$version"
+    $packageDirectory = Join-Path $packageRoot "AnotherSurface-$version"
     $stamp = Get-Date -Format "yyyyMMdd-HHmmss-fff"
     $staging = Join-Path $projectRoot ".work\tmp\package-$stamp"
-    $backup = Join-Path $projectRoot ".work\tmp\Vellume-$version-before-$stamp"
+    $backup = Join-Path $projectRoot ".work\tmp\AnotherSurface-$version-before-$stamp"
     foreach ($target in @($output, $packageDirectory, $staging, $backup)) {
         if (-not ([IO.Path]::GetFullPath($target)).StartsWith($projectRoot.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
             throw "배포 경로가 저장소 밖을 가리킵니다: $target"
@@ -103,13 +103,13 @@ if ($Package) {
             }
         }
     }
-    foreach ($required in @("Vellume.App.exe", "Vellume.App.dll", "Vellume.Core.dll", "Vellume.Windows.dll", "Vellume.Renderer.Native.exe")) {
+    foreach ($required in @("AnotherSurface.App.exe", "AnotherSurface.App.dll", "AnotherSurface.Core.dll", "AnotherSurface.Windows.dll", "AnotherSurface.Renderer.Native.exe")) {
         if (-not (Test-Path -LiteralPath (Join-Path $output $required))) { throw "배포 파일 누락: $required" }
     }
     New-Item -ItemType Directory -Path $staging -Force | Out-Null
     # Publish from the dependency graph into a fresh folder. Copying bin/ would
     # also ship obsolete DLLs left behind after a dependency was removed.
-    dotnet publish (Join-Path $projectRoot "src\Vellume.App\Vellume.App.csproj") `
+    dotnet publish (Join-Path $projectRoot "src\AnotherSurface.App\AnotherSurface.App.csproj") `
         -c $Configuration --no-build --no-restore -o $staging `
         /p:CopyOutputSymbolsToPublishDirectory=false
     if ($LASTEXITCODE -ne 0) { throw "배포 파일 게시에 실패했습니다." }

@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Preserve published bytes for BuildInfo SHA-256 verification.
+artifacts/** -text

@@ -6,4 +6,4 @@
 - `Launcher/`: 제거된 데스크톱 퀵슬롯용 이미지
 - `CompanionGeneration/`, `IconGeneration/`: 이미지 생성·가공 원본
 
-현재 앱의 실행 자산은 `src/Vellume.App/Assets/`에 있습니다. 이 폴더는 앱 빌드·배포에 포함하지 않습니다.
+현재 앱의 실행 자산은 `src/AnotherSurface.App/Assets/`에 있습니다. 이 폴더는 앱 빌드·배포에 포함하지 않습니다.

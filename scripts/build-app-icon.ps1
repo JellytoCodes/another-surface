@@ -4,8 +4,8 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
 # Package the existing Dock artwork; no crop, recoloring or background changes.
-$sourcePath = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\Vellume.App\Assets\Brand\vellume-dock-icon-v3.png'
-$outputPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\Vellume.App\Assets\Brand\vellume-app.ico'
+$sourcePath = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\AnotherSurface.App\Assets\Brand\another-surface-dock-icon-v3.png'
+$outputPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\AnotherSurface.App\Assets\Brand\another-surface-app.ico'
 $sizes = @(16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
 $frames = [System.Collections.Generic.List[byte[]]]::new()
 $source = [System.Drawing.Bitmap]::new($sourcePath)
