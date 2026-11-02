@@ -934,6 +934,50 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void RenameWallpaperButton_Click(object sender, RoutedEventArgs args)
+    {
+        if (sender is not WpfButton { Tag: WallpaperItem item } button) return;
+        var entered = false;
+        var applyEntered = false;
+        button.IsEnabled = false;
+        try
+        {
+            await _libraryMutationGate.WaitAsync(_libraryLifetime.Token);
+            entered = true;
+            await _wallpaperApplyGate.WaitAsync(_libraryLifetime.Token);
+            applyEntered = true;
+            if (_runtimeClosing || !Library.Contains(item)) return;
+
+            var dialog = new WallpaperNameDialog(item.Name) { Owner = this };
+            if (dialog.ShowDialog() != true || dialog.WallpaperName == item.Name) return;
+            var oldName = item.Name;
+            _settings.Library = Library.ToList();
+            if (!_settings.RenameWallpaper(item.Id, dialog.WallpaperName)) return;
+            try { await SaveSettingsAsync(); }
+            catch
+            {
+                _settings.RenameWallpaper(item.Id, oldName);
+                throw;
+            }
+            foreach (var display in Displays)
+            {
+                if (_settings.FindDisplayProfile(display.Id)?.Wallpaper?.Id == item.Id)
+                    display.AssignedWallpaperName = item.Name;
+            }
+            DisplayList.Items.Refresh();
+            RefreshLibraryFilter();
+            UpdateSelectedDisplayStatus();
+        }
+        catch (OperationCanceledException) when (_runtimeClosing) { }
+        catch (Exception exception) { await ReportErrorAsync("월페이퍼 이름을 변경하지 못했습니다.", exception); }
+        finally
+        {
+            if (applyEntered) _wallpaperApplyGate.Release();
+            if (entered) _libraryMutationGate.Release();
+            button.IsEnabled = true;
+        }
+    }
+
     private async void LibraryList_MouseDoubleClick(
         object sender,
         MouseButtonEventArgs eventArgs)

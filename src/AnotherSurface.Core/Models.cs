@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json.Serialization;
 
 namespace AnotherSurface.Core;
@@ -113,10 +114,23 @@ public enum SystemShortcutKind
     PowerShell
 }
 
-public sealed class WallpaperItem
+public sealed class WallpaperItem : INotifyPropertyChanged
 {
+    private string _name = string.Empty;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
     public Guid Id { get; set; } = Guid.NewGuid();
-    public string Name { get; set; } = string.Empty;
+    public string Name
+    {
+        get => _name;
+        set
+        {
+            if (_name == value) return;
+            _name = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Name)));
+        }
+    }
     public string SourcePath { get; set; } = string.Empty;
     public string OriginalSourcePath { get; set; } = string.Empty;
     public WallpaperKind Kind { get; set; }
@@ -139,11 +153,6 @@ public sealed class WallpaperItem
     public string VideoRangeLabel => HasVideoRange
         ? $"구간 반복 · {VideoStartSeconds:0.###}~{VideoEndSeconds:0.###}초"
         : Kind == WallpaperKind.Video ? "전체 반복" : string.Empty;
-    [JsonIgnore]
-    public string StorageLabel => IsManaged
-        ? $"{KindLabel} · Another Surface 라이브러리"
-        : $"{KindLabel} · 외부 경로";
-
     public void ValidateVideoRange(double duration)
     {
         if (!HasVideoRange) return;
@@ -733,6 +742,23 @@ public sealed class AppSettings
     public DockSettings Dock { get; set; } = new();
     public bool RestoreOnStartup { get; set; } = true;
     public bool LaunchAtWindowsLogin { get; set; }
+
+    public bool RenameWallpaper(Guid wallpaperId, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        var item = Library.FirstOrDefault(candidate => candidate.Id == wallpaperId);
+        if (item is null) return false;
+
+        item.Name = name.Trim();
+        if (ActiveWallpaper?.Id == wallpaperId)
+            ActiveWallpaper.Name = item.Name;
+        foreach (var profile in DisplayWallpapers)
+        {
+            if (profile.Wallpaper?.Id == wallpaperId)
+                profile.Wallpaper.Name = item.Name;
+        }
+        return true;
+    }
 
     public DisplayWallpaperProfile GetOrCreateDisplayProfile(
         string displayId)

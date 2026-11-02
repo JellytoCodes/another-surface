@@ -192,7 +192,7 @@
                 <Grid Grid.Row="1" Margin="0,14,0,12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="170"/>
+                        <ColumnDefinition Width="332"/>
                     </Grid.ColumnDefinitions>
                     <WrapPanel x:Name="LibraryFilterBar" VerticalAlignment="Center">
                         <Button Content="전체" Tag="All" Click="LibraryFilter_Click" Padding="12,7" Margin="0,0,6,0" Background="{StaticResource AccentBrush}"/>
@@ -263,10 +263,12 @@
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
                                         <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"
                                                    FontSize="15" FontWeight="SemiBold"/>
-                                        <TextBlock Text="{Binding StorageLabel}" Margin="0,4,0,0" Foreground="{StaticResource MutedTextBrush}" FontSize="11"/>
+                                        <TextBlock Text="{Binding KindLabel}" Margin="0,4,0,0" Foreground="{StaticResource MutedTextBrush}" FontSize="11"/>
                                         <TextBlock Text="{Binding VideoRangeLabel}" TextTrimming="CharacterEllipsis" FontSize="11" Foreground="{StaticResource MutedTextBrush}"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Content="이름 변경" Click="RenameWallpaperButton_Click" Tag="{Binding}"
+                                                ToolTip="라이브러리에 표시할 이름 변경" Padding="11,8" Margin="0,0,6,0"/>
                                         <Button Content="구간" Click="VideoRangeButton_Click" Tag="{Binding}"
                                                 ToolTip="영상 재생 구간 설정" Padding="11,8" Margin="0,0,6,0">
                                             <Button.Style>
@@ -305,6 +307,7 @@
 
                 <Grid Grid.Row="3" Margin="0,12,0,0">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
@@ -405,6 +408,53 @@
                             </Style>
                         </TextBlock.Style>
                     </TextBlock>
+                    <Border Grid.Row="2" Margin="0,8,0,0" Padding="12,10" CornerRadius="10"
+                            Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedItem, ElementName=DisplayList}" Value="{x:Null}">
+                                        <Setter Property="IsEnabled" Value="False"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsWallpaperApplying, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                        <Setter Property="IsEnabled" Value="False"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel>
+                            <TextBlock Text="{Binding SelectedItem.Name, ElementName=DisplayList, StringFormat={}{0} · 화면·소리 설정, TargetNullValue=디스플레이를 선택하세요, FallbackValue=디스플레이를 선택하세요}"
+                                       Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="160"/>
+                                    <ColumnDefinition Width="20"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="화면 맞춤" FontSize="12" Margin="0,0,0,5"/>
+                                    <ComboBox x:Name="FitComboBox" SelectionChanged="FitComboBox_SelectionChanged"
+                                              AutomationProperties.Name="선택 디스플레이 화면 맞춤"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <CheckBox x:Name="MuteCheckBox" Content="월페이퍼 소리 끄기" FontSize="12"
+                                              Checked="MuteCheckBox_Changed" Unchecked="MuteCheckBox_Changed"/>
+                                    <Grid Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="42"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="볼륨" VerticalAlignment="Center" FontSize="12" Margin="0,0,10,0"/>
+                                        <Slider x:Name="VolumeSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5"
+                                                ValueChanged="VolumeSlider_ValueChanged" AutomationProperties.Name="선택 디스플레이 볼륨"/>
+                                        <TextBlock x:Name="VolumeValueText" Grid.Column="2" Text="25%" TextAlignment="Right"
+                                                   VerticalAlignment="Center" FontSize="12"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
                 </Grid>
 
                 <Border Grid.Row="4" Margin="0,12,0,0" Padding="12,10" CornerRadius="10" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
@@ -989,7 +1039,7 @@
                                 <TextBlock Text="재생 설정은 PC에 로컬로 저장됩니다."
                                Margin="0,7,0,0"
                                Foreground="{StaticResource MutedTextBrush}"/>
-                    <TextBlock Text="{Binding SelectedItem.Name, ElementName=DisplayList, StringFormat=재생 설정 대상: {0}, TargetNullValue=디스플레이를 선택하세요, FallbackValue=디스플레이를 선택하세요}"
+                    <TextBlock Text="{Binding SelectedItem.Name, ElementName=DisplayList, StringFormat=영상 최적화 대상: {0}, TargetNullValue=디스플레이를 선택하세요, FallbackValue=디스플레이를 선택하세요}"
                                Margin="0,7,0,0" Foreground="{StaticResource AccentBrush}"/>
                 </StackPanel>
 
@@ -1010,31 +1060,8 @@
                                     </Style.Triggers>
                                 </Style>
                             </StackPanel.Style>
-                                        <TextBlock Text="화면 맞춤" FontWeight="SemiBold" FontSize="15"/>
-                        <ComboBox x:Name="FitComboBox"
-                                  Width="220"
-                                  HorizontalAlignment="Left"
-                                  Margin="0,9,0,22"
-                                  SelectionChanged="FitComboBox_SelectionChanged"/>
-
-                        <CheckBox x:Name="MuteCheckBox"
-                                              Content="월페이퍼 소리 끄기"
-                                  Checked="MuteCheckBox_Changed"
-                                  Unchecked="MuteCheckBox_Changed"/>
-
-                        <TextBlock Margin="0,22,0,7">
-                                            <Run Text="볼륨 "/>
-                            <Run x:Name="VolumeValueText" Text="25%"/>
-                        </TextBlock>
-                        <Slider x:Name="VolumeSlider"
-                                Minimum="0"
-                                Maximum="100"
-                                TickFrequency="5"
-                                ValueChanged="VolumeSlider_ValueChanged"/>
-
                         <CheckBox x:Name="OptimizeVideoCheckBox"
                                   Content="영상 GPU 사용량 자동 최적화"
-                                  Margin="0,24,0,0"
                                   Checked="OptimizeVideoCheckBox_Changed"
                                   Unchecked="OptimizeVideoCheckBox_Changed"/>
                         <TextBlock Text="원본은 보존하고 디스플레이 해상도에 맞는 30fps H.264 재생 캐시를 사용합니다. 첫 적용 때만 변환 시간이 필요할 수 있습니다."
