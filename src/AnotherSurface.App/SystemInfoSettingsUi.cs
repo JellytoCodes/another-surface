@@ -23,6 +23,10 @@ public partial class MainWindow
         SystemTextColorTextBox.Text = appearance.TextColor;
         SystemAccentSwatch.Background = new SolidColorBrush((System.Windows.Media.Color)ColorConverter.ConvertFromString(appearance.AccentColor));
         SystemTextSwatch.Background = new SolidColorBrush((System.Windows.Media.Color)ColorConverter.ConvertFromString(appearance.TextColor));
+        var previewTextColor = ((SolidColorBrush)SystemTextSwatch.Background).Color;
+        var previewBrightness = 0.2126 * previewTextColor.R + 0.7152 * previewTextColor.G + 0.0722 * previewTextColor.B;
+        SystemInfoPreviewBackdrop.Background = (System.Windows.Media.Brush)FindResource(
+            previewBrightness >= 140 ? "PreviewBrush" : "SidebarBrush");
         SystemScaleComboBox.ItemsSource = new[] { 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2 }
             .Append(appearance.Scale).Distinct().Order().Select(value => new SelectionOption<double>(value, $"{value:P0}")).ToList();
         SystemScaleComboBox.SelectedItem = ((IEnumerable<SelectionOption<double>>)SystemScaleComboBox.ItemsSource)

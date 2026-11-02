@@ -82,7 +82,7 @@ public partial class MainWindow : Window
         WindowsStartupRegistrationService startupRegistrationService)
     {
         InitializeComponent();
-        VersionText.Text = $"라이브 데스크톱 · {typeof(App).Assembly.GetName().Version?.ToString(3)}";
+        VersionText.Text = typeof(App).Assembly.GetName().Version?.ToString(3);
         _quickSlotRuntimeTimer = new DispatcherTimer(
             DispatcherPriority.Background)
         {
@@ -728,6 +728,10 @@ public partial class MainWindow : Window
         DockPage.Visibility = Visibility.Collapsed;
         SettingsPage.Visibility = Visibility.Collapsed;
         page.Visibility = Visibility.Visible;
+        WallpaperNavigationButton.Tag = page == WallpaperPage ? "Selected" : null;
+        WidgetsNavigationButton.Tag = page == WidgetsPage ? "Selected" : null;
+        DockNavigationButton.Tag = page == DockPage ? "Selected" : null;
+        SettingsNavigationButton.Tag = page == SettingsPage ? "Selected" : null;
         UpdatePreviewResources();
     }
 

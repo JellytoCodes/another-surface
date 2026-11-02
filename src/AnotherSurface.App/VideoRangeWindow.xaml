@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="영상 재생 구간" Width="520" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
-        Background="{StaticResource WindowBrush}"
+        Background="{StaticResource WindowBrush}" Foreground="{StaticResource TextBrush}"
         Icon="pack://application:,,,/AnotherSurface.App;component/Assets/Brand/another-surface-app.ico">
     <StackPanel Margin="24">
         <TextBlock x:Name="VideoName" FontSize="20" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
@@ -13,16 +13,16 @@
             <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
             <StackPanel Margin="0,0,12,0">
                 <TextBlock Text="시작 (초)" Margin="0,0,0,8"/>
-                <TextBox x:Name="StartSeconds" FontSize="18" Padding="10" Foreground="Black" Background="White"/>
+                <TextBox x:Name="StartSeconds" FontSize="18" Padding="10"/>
             </StackPanel>
             <StackPanel Grid.Column="1">
                 <TextBlock Text="종료 (초)" Margin="0,0,0,8"/>
-                <TextBox x:Name="EndSeconds" FontSize="18" Padding="10" Foreground="Black" Background="White"/>
+                <TextBox x:Name="EndSeconds" FontSize="18" Padding="10"/>
             </StackPanel>
         </Grid>
         <TextBlock Text="예: 10 ~ 30 → 해당 20초를 반복합니다. 소수점 입력 가능.&#x0a;체크를 해제하면 영상 전체를 반복합니다."
                    Margin="0,14,0,0" TextWrapping="Wrap"/>
-        <TextBlock x:Name="ValidationError" Foreground="#FF91AC" TextWrapping="Wrap" MinHeight="35" Margin="0,10,0,0"/>
+        <TextBlock x:Name="ValidationError" Foreground="{StaticResource DangerTextBrush}" TextWrapping="Wrap" MinHeight="35" Margin="0,10,0,0"/>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Content="취소" IsCancel="True" Margin="0,0,8,0"/>
             <Button Content="저장" IsDefault="True" Click="Save_Click" Background="{StaticResource AccentBrush}"/>

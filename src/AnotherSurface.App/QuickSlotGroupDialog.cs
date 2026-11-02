@@ -1,8 +1,6 @@
 using System.Windows;
-using System.Windows.Media;
+using WpfBrush = System.Windows.Media.Brush;
 using WpfButton = System.Windows.Controls.Button;
-using WpfBrushes = System.Windows.Media.Brushes;
-using WpfColor = System.Windows.Media.Color;
 using WpfHorizontalAlignment = System.Windows.HorizontalAlignment;
 using WpfOrientation = System.Windows.Controls.Orientation;
 using WpfStackPanel = System.Windows.Controls.StackPanel;
@@ -19,11 +17,11 @@ internal sealed class QuickSlotGroupDialog : Window
     {
         Title = "새 퀵슬롯 그룹";
         Width = 390;
-        Height = 190;
+        SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(WpfColor.FromRgb(13, 17, 26));
-        Foreground = WpfBrushes.White;
+        Background = (WpfBrush)FindResource("WindowBrush");
+        Foreground = (WpfBrush)FindResource("TextBrush");
 
         var panel = new WpfStackPanel
         {
@@ -39,8 +37,7 @@ internal sealed class QuickSlotGroupDialog : Window
         {
             Text = "예: 자주 사용, 게임, 개발",
             Margin = new Thickness(0, 5, 0, 10),
-            Foreground = new SolidColorBrush(
-                WpfColor.FromRgb(148, 158, 181))
+            Foreground = (WpfBrush)FindResource("MutedTextBrush")
         });
         _nameTextBox.Height = 32;
         _nameTextBox.MaxLength = 32;
@@ -64,7 +61,8 @@ internal sealed class QuickSlotGroupDialog : Window
         {
             Content = "만들기",
             IsDefault = true,
-            MinWidth = 78
+            MinWidth = 78,
+            Background = (WpfBrush)FindResource("AccentBrush")
         };
         createButton.Click += (_, _) =>
         {

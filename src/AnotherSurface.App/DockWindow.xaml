@@ -72,7 +72,7 @@
                             <Style TargetType="{x:Type Border}">
                                 <Setter Property="Margin" Value="0"/>
                                 <Setter Property="CornerRadius" Value="15"/>
-                                <Setter Property="BorderBrush" Value="#55FFFFFF"/>
+                                <Setter Property="BorderBrush" Value="#5582BFB6"/>
                                 <Setter Property="BorderThickness" Value="1"/>
                                 <Setter Property="SnapsToDevicePixels" Value="True"/>
                                 <Setter Property="RenderOptions.BitmapScalingMode"
@@ -99,7 +99,7 @@
                             Height="42"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
-                            Background="#66FFFFFF"
+                            Background="#6682BFB6"
                             Visibility="Collapsed"/>
                     <Ellipse x:Name="RunningIndicator"
                              Width="7"
@@ -107,7 +107,7 @@
                              Margin="0,0,0,-6"
                              VerticalAlignment="Bottom"
                              HorizontalAlignment="Center"
-                             Fill="#E6F7FF"
+                             Fill="#26716C"
                              Visibility="{Binding RunningVisibility}"/>
                     <Ellipse x:Name="AttentionIndicator"
                              Width="10"
@@ -115,8 +115,8 @@
                              Margin="0,-1,-1,0"
                              VerticalAlignment="Top"
                              HorizontalAlignment="Right"
-                             Fill="#FF4F81"
-                             Stroke="#FFF4FA"
+                             Fill="#D5688D"
+                             Stroke="#FFF9F5"
                              StrokeThickness="1.5"
                              Visibility="{Binding AttentionVisibility}"/>
                 </Grid>
@@ -141,8 +141,8 @@
             Margin="10"
             Padding="8,2"
             CornerRadius="22"
-            Background="#68151C27"
-            BorderBrush="#44DDF7FF"
+            Background="{StaticResource DockSurfaceBrush}"
+            BorderBrush="{StaticResource DockBorderBrush}"
             BorderThickness="1">
         <Border.Effect>
             <DropShadowEffect BlurRadius="22"
@@ -165,7 +165,7 @@
                     Height="40"
                     Margin="5,0"
                     VerticalAlignment="Center"
-                    Background="#55FFFFFF"
+                    Background="#5582BFB6"
                     Visibility="{Binding RunningSectionVisibility}"/>
 
             <ItemsControl ItemsSource="{Binding RunningItems}"

@@ -1282,7 +1282,7 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
         highlighted.Setters.Add(new Setter(
             System.Windows.Controls.Border.BackgroundProperty,
             new SolidColorBrush(
-                WpfColor.FromRgb(206, 232, 255)),
+                WpfColor.FromRgb(216, 240, 233)),
             "RowBorder"));
         template.Triggers.Add(highlighted);
         return template;
@@ -1298,11 +1298,11 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
         background.SetValue(
             System.Windows.Controls.Border.BackgroundProperty,
             new SolidColorBrush(
-                WpfColor.FromRgb(246, 176, 211)));
+                WpfColor.FromRgb(246, 224, 229)));
         background.SetValue(
             System.Windows.Controls.Border.BorderBrushProperty,
             new SolidColorBrush(
-                WpfColor.FromRgb(225, 40, 133)));
+                WpfColor.FromRgb(213, 104, 141)));
         background.SetValue(
             System.Windows.Controls.Border.BorderThicknessProperty,
             new Thickness(1));
@@ -1318,7 +1318,7 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
         glyph.SetValue(
             System.Windows.Controls.TextBlock.ForegroundProperty,
             new SolidColorBrush(
-                WpfColor.FromRgb(55, 59, 62)));
+                WpfColor.FromRgb(68, 55, 56)));
         glyph.SetValue(
             System.Windows.Controls.TextBlock.FontFamilyProperty,
             new WpfFontFamily("Segoe UI"));
@@ -1597,7 +1597,7 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
         => new()
         {
             Header = CreateDockMenuHeader(title),
-            Foreground = WpfBrushes.Black,
+            Foreground = new SolidColorBrush(WpfColor.FromRgb(68, 55, 56)),
             Background = WpfBrushes.Transparent,
             FontWeight = FontWeights.SemiBold
         };
@@ -1608,10 +1608,10 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
         var menu = new System.Windows.Controls.ContextMenu
         {
             Background = new SolidColorBrush(
-                WpfColor.FromRgb(248, 248, 248)),
-            Foreground = WpfBrushes.Black,
+                WpfColor.FromRgb(250, 252, 249)),
+            Foreground = new SolidColorBrush(WpfColor.FromRgb(68, 55, 56)),
             BorderBrush = new SolidColorBrush(
-                WpfColor.FromRgb(146, 146, 146)),
+                WpfColor.FromRgb(130, 191, 182)),
             BorderThickness = new Thickness(1),
             FontFamily = new WpfFontFamily("Segoe UI"),
             FontSize = 12
@@ -1619,17 +1619,17 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
         menu.Resources[WpfSystemColors.MenuBrushKey] =
             menu.Background;
         menu.Resources[WpfSystemColors.MenuTextBrushKey] =
-            WpfBrushes.Black;
+            new SolidColorBrush(WpfColor.FromRgb(68, 55, 56));
         menu.Resources[WpfSystemColors.HighlightTextBrushKey] =
-            WpfBrushes.Black;
+            new SolidColorBrush(WpfColor.FromRgb(68, 55, 56));
         menu.Resources[WpfSystemColors.GrayTextBrushKey] =
-            new SolidColorBrush(WpfColor.FromRgb(95, 95, 95));
+            new SolidColorBrush(WpfColor.FromRgb(116, 105, 104));
 
         var textStyle = new Style(
             typeof(System.Windows.Controls.TextBlock));
         textStyle.Setters.Add(new Setter(
             System.Windows.Controls.TextBlock.ForegroundProperty,
-            WpfBrushes.Black));
+            new SolidColorBrush(WpfColor.FromRgb(68, 55, 56))));
         textStyle.Setters.Add(new Setter(
             System.Windows.Controls.TextBlock.FontWeightProperty,
             FontWeights.SemiBold));
@@ -1640,7 +1640,7 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
             typeof(System.Windows.Controls.MenuItem));
         itemStyle.Setters.Add(new Setter(
             System.Windows.Controls.MenuItem.ForegroundProperty,
-            WpfBrushes.Black));
+            new SolidColorBrush(WpfColor.FromRgb(68, 55, 56))));
         itemStyle.Setters.Add(new Setter(
             System.Windows.Controls.MenuItem.BackgroundProperty,
             WpfBrushes.Transparent));
@@ -1657,7 +1657,7 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
         => new()
         {
             Text = title,
-            Foreground = WpfBrushes.Black,
+            Foreground = new SolidColorBrush(WpfColor.FromRgb(68, 55, 56)),
             FontFamily = new WpfFontFamily("Segoe UI"),
             FontSize = 12,
             FontWeight = FontWeights.SemiBold

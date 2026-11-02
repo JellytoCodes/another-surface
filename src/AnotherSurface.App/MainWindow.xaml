@@ -3,63 +3,92 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Another Surface"
         Icon="pack://application:,,,/Assets/Brand/another-surface-app.ico"
-        Width="1080"
-        Height="700"
-        MinWidth="900"
-        MinHeight="600"
+        Width="1160"
+        Height="780"
+        MinWidth="1000"
+        MinHeight="700"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource WindowBrush}"
+        Foreground="{StaticResource TextBrush}"
+        UseLayoutRounding="True"
         Loaded="Window_Loaded"
         Closing="Window_Closing">
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="218"/>
+            <ColumnDefinition Width="236"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
         <Border Grid.Column="0"
-                Background="#0D111A"
-                BorderBrush="#202635"
+                Background="{StaticResource SidebarBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="0,0,1,0">
-            <Grid Margin="18,22">
+            <Grid Margin="18,24,18,20">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="28"/>
+                    <RowDefinition Height="26"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <StackPanel>
+                <StackPanel HorizontalAlignment="Center">
+                    <Image Source="pack://siteoforigin:,,,/Assets/Brand/another-surface-dock-icon-v3.png"
+                           Width="104" Height="104" Margin="0,0,0,13"
+                           RenderOptions.BitmapScalingMode="HighQuality"
+                           AutomationProperties.Name="초미 Another Surface 로고"/>
                     <TextBlock Text="Another Surface"
-                               FontSize="20"
-                               TextWrapping="Wrap"
+                               FontSize="21"
+                               HorizontalAlignment="Center"
                                FontWeight="Bold"
-                               Foreground="{StaticResource AccentBrush}"/>
+                               Foreground="{StaticResource TextBrush}"/>
                     <TextBlock x:Name="VersionText"
-                               Margin="0,4,0,0"
+                               HorizontalAlignment="Center"
+                               Margin="0,7,0,0"
                                Foreground="{StaticResource MutedTextBrush}"
                                FontSize="12"/>
                 </StackPanel>
 
                 <StackPanel Grid.Row="2">
-                    <Button Style="{StaticResource NavigationButton}"
-                                Content="▦   월페이퍼"
-                            Click="WallpaperNavigation_Click"/>
-                    <Button Style="{StaticResource NavigationButton}"
-                                Content="⌁   위젯"
-                            Click="WidgetsNavigation_Click"/>
-                    <Button Style="{StaticResource NavigationButton}"
-                                Content="▤   Dock"
-                            Click="DockNavigation_Click"/>
-                    <Button Style="{StaticResource NavigationButton}"
-                                Content="⚙   설정"
-                            Click="SettingsNavigation_Click"/>
+                    <Button x:Name="WallpaperNavigationButton" Tag="Selected"
+                            Style="{StaticResource NavigationButton}"
+                            AutomationProperties.Name="월페이퍼" Click="WallpaperNavigation_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="pack://siteoforigin:,,,/Assets/Brand/Navigation/wallpaper.png"
+                                   Width="32" Height="32" RenderOptions.BitmapScalingMode="HighQuality"/>
+                            <TextBlock Text="월페이퍼" Margin="13,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="WidgetsNavigationButton" Style="{StaticResource NavigationButton}"
+                            AutomationProperties.Name="위젯" Click="WidgetsNavigation_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="pack://siteoforigin:,,,/Assets/Brand/Navigation/widgets.png"
+                                   Width="32" Height="32" RenderOptions.BitmapScalingMode="HighQuality"/>
+                            <TextBlock Text="위젯" Margin="13,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="DockNavigationButton" Style="{StaticResource NavigationButton}"
+                            AutomationProperties.Name="Dock" Click="DockNavigation_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="pack://siteoforigin:,,,/Assets/Brand/Navigation/dock.png"
+                                   Width="32" Height="32" RenderOptions.BitmapScalingMode="HighQuality"/>
+                            <TextBlock Text="Dock" Margin="13,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="SettingsNavigationButton" Style="{StaticResource NavigationButton}"
+                            AutomationProperties.Name="설정" Click="SettingsNavigation_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="pack://siteoforigin:,,,/Assets/Brand/Navigation/settings.png"
+                                   Width="32" Height="32" RenderOptions.BitmapScalingMode="HighQuality"/>
+                            <TextBlock Text="설정" Margin="13,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <StackPanel Grid.Row="3">
                     <Border Background="{StaticResource SurfaceBrush}"
-                            CornerRadius="8"
-                            Padding="12">
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                            CornerRadius="12"
+                            Padding="14">
                         <StackPanel>
                             <TextBlock Text="월페이퍼 상태"
                                        FontSize="11"
@@ -74,8 +103,8 @@
                     <Button Content="Another Surface 종료"
                             Margin="0,10,0,0"
                             Padding="12,9"
-                            Background="#522A35"
-                            Foreground="#FFF1F4"
+                            Background="{StaticResource DangerBrush}"
+                            Foreground="{StaticResource DangerTextBrush}"
                             Click="ExitButton_Click"/>
                 </StackPanel>
             </Grid>
@@ -89,7 +118,7 @@
                         <Setter Property="Padding" Value="0"/>
                         <Setter Property="Margin" Value="0,0,0,8"/>
                         <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-                        <Setter Property="BorderBrush" Value="#293146"/>
+                        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
                         <Setter Property="BorderThickness" Value="1"/>
                         <Setter Property="Template">
                             <Setter.Value>
@@ -109,7 +138,7 @@
                                 <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter Property="Background" Value="#211D3D"/>
+                                <Setter Property="Background" Value="{StaticResource AccentSoftBrush}"/>
                                 <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
                             </Trigger>
                         </Style.Triggers>
@@ -175,7 +204,7 @@
                     <Grid Grid.Column="1" Margin="8,0,0,0">
                         <TextBox x:Name="LibrarySearchBox" TextChanged="LibrarySearchBox_TextChanged"
                                  Background="{StaticResource SurfaceBrush}" Foreground="{StaticResource TextBrush}"
-                                 BorderBrush="#343D50" BorderThickness="1" Padding="9,7"
+                                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="9,7"
                                  VerticalContentAlignment="Center" ToolTip="이름으로 검색"
                                  AutomationProperties.Name="월페이퍼 이름 검색"/>
                         <TextBlock Text="이름 검색" Margin="10,0" VerticalAlignment="Center"
@@ -213,9 +242,9 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <Border Width="92" Height="60" CornerRadius="7" Background="#2A3150" HorizontalAlignment="Left">
+                                    <Border Width="92" Height="60" CornerRadius="7" Background="{StaticResource AccentSoftBrush}" HorizontalAlignment="Left">
                                         <Grid>
-                                            <TextBlock Text="{Binding KindLabel}" Foreground="#BEC8D1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding KindLabel}" Foreground="{StaticResource MutedTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -288,7 +317,7 @@
                             <TextBlock Text="적용할 디스플레이" FontWeight="SemiBold"/>
                         </StackPanel>
                         <Button Grid.Column="1" Content="모두 중지" Click="StopAllButton_Click"
-                                Padding="10,5" Background="#522A35" ToolTip="모든 디스플레이의 월페이퍼를 중지합니다."/>
+                                Padding="10,5" Background="{StaticResource DangerBrush}" ToolTip="모든 디스플레이의 월페이퍼를 중지합니다."/>
                     </Grid>
                     <ListBox x:Name="DisplayList" Grid.Row="1" Height="74" SelectionMode="Single"
                              SelectionChanged="DisplayList_SelectionChanged"
@@ -357,7 +386,7 @@
                                             </Button.Style>
                                         </Button>
                                         <Button Content="중지" Tag="{Binding}" Click="DisplayStopButton_Click"
-                                                IsEnabled="{Binding HasAssignedWallpaper}" Padding="8,3" FontSize="10" Background="#522A35"/>
+                                                IsEnabled="{Binding HasAssignedWallpaper}" Padding="8,3" FontSize="10" Background="{StaticResource DangerBrush}"/>
                                     </StackPanel>
                                     </Grid>
                                 </Grid>
@@ -378,7 +407,7 @@
                     </TextBlock>
                 </Grid>
 
-                <Border Grid.Row="4" Margin="0,12,0,0" Padding="12,10" CornerRadius="10" Background="{StaticResource SurfaceBrush}">
+                <Border Grid.Row="4" Margin="0,12,0,0" Padding="12,10" CornerRadius="10" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -445,7 +474,7 @@
                 <ScrollViewer x:Name="WidgetsScrollViewer" Grid.Row="2"
                               VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
-                        <Border Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18">
+                        <Border Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                             <StackPanel>
                                 <Grid Margin="0,0,0,12">
                                     <TextBlock Text="배치" FontSize="16" FontWeight="SemiBold"/>
@@ -488,7 +517,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Margin="0,16,0,0" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18">
+                        <Border Margin="0,16,0,0" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                             <StackPanel>
                                 <TextBlock Text="시스템 정보 · SysDash" FontSize="18" FontWeight="SemiBold"/>
                                 <TextBlock Text="CPU·GPU·RAM은 최근 60회 측정 추이, 디스크는 사용량 막대로 표시합니다."
@@ -496,7 +525,7 @@
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="216"/><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <StackPanel>
-                                        <Border Background="#434A5A" CornerRadius="6" Padding="8">
+                                        <Border x:Name="SystemInfoPreviewBackdrop" Background="{StaticResource PreviewBrush}" CornerRadius="6" Padding="8">
                                             <Grid>
                                                 <ContentControl x:Name="SystemInfoPreview" HorizontalContentAlignment="Center">
                                                     <ContentControl.LayoutTransform><ScaleTransform ScaleX="0.63" ScaleY="0.63"/></ContentControl.LayoutTransform>
@@ -518,13 +547,13 @@
                                         </WrapPanel>
                                         <WrapPanel Margin="0,0,0,8">
                                             <TextBlock Text="강조색" Width="60" VerticalAlignment="Center"/>
-                                            <Border x:Name="SystemAccentSwatch" Width="24" Height="24" CornerRadius="4" Margin="0,0,8,0" BorderBrush="#667080" BorderThickness="1"/>
+                                            <Border x:Name="SystemAccentSwatch" Width="24" Height="24" CornerRadius="4" Margin="0,0,8,0" BorderBrush="{StaticResource AccentBorderBrush}" BorderThickness="1"/>
                                             <TextBox x:Name="SystemAccentColorTextBox" Width="90" MaxLength="7" VerticalContentAlignment="Center" ToolTip="#RRGGBB 색상 코드"/>
                                             <Button Content="선택…" Tag="Accent" Click="ChooseSystemColor_Click" Padding="10,5" Margin="8,0,0,0"/>
                                         </WrapPanel>
                                         <WrapPanel Margin="0,0,0,8">
                                             <TextBlock Text="글자색" Width="60" VerticalAlignment="Center"/>
-                                            <Border x:Name="SystemTextSwatch" Width="24" Height="24" CornerRadius="4" Margin="0,0,8,0" BorderBrush="#667080" BorderThickness="1"/>
+                                            <Border x:Name="SystemTextSwatch" Width="24" Height="24" CornerRadius="4" Margin="0,0,8,0" BorderBrush="{StaticResource AccentBorderBrush}" BorderThickness="1"/>
                                             <TextBox x:Name="SystemTextColorTextBox" Width="90" MaxLength="7" VerticalContentAlignment="Center" ToolTip="#RRGGBB 색상 코드"/>
                                             <Button Content="선택…" Tag="Text" Click="ChooseSystemColor_Click" Padding="10,5" Margin="8,0,0,0"/>
                                         </WrapPanel>
@@ -532,7 +561,7 @@
                                             <Button Content="색상 적용" Click="ApplySystemColors_Click" Padding="10,5"/>
                                             <Button Content="기본값" Click="ResetSystemAppearance_Click" Padding="10,5" Margin="8,0,0,0"/>
                                         </StackPanel>
-                                        <TextBlock x:Name="SystemColorStatusText" Foreground="#F2C97D" FontSize="11" TextWrapping="Wrap"/>
+                                        <TextBlock x:Name="SystemColorStatusText" Foreground="{StaticResource WarningBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         <WrapPanel Margin="0,6,0,8">
                                             <TextBlock Text="크기" Width="110" VerticalAlignment="Center"/>
                                             <ComboBox x:Name="SystemScaleComboBox" Width="150" SelectionChanged="SystemScale_Changed"/>
@@ -546,7 +575,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Margin="0,16,0,0" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18">
+                        <Border Margin="0,16,0,0" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                             <StackPanel>
                                 <TextBlock Text="스티커" FontSize="18" FontWeight="SemiBold"/>
                                 <TextBlock Text="아래 이미지를 눌러 붙이세요. 드래그로 이동하고 ↘ 손잡이로 크기, ↻ 손잡이로 회전을 조절합니다."
@@ -609,20 +638,20 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Margin="0,16,0,0" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18">
+                        <Border Margin="0,16,0,0" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="18" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                             <StackPanel>
                                 <TextBlock Text="시계 디자인" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,14"/>
                                 <WrapPanel Margin="0,0,0,12">
                                     <TextBlock Text="시계 색상" VerticalAlignment="Center" Margin="0,0,12,0"/>
                                     <Border x:Name="ClockColorSwatch" Width="26" Height="26" CornerRadius="6"
-                                            BorderBrush="#667080" BorderThickness="1" Margin="0,0,8,0"/>
+                                            BorderBrush="{StaticResource AccentBorderBrush}" BorderThickness="1" Margin="0,0,8,0"/>
                                     <TextBox x:Name="ClockColorTextBox" Width="100" MaxLength="7" Text="#FFFFFF"
                                              VerticalContentAlignment="Center" ToolTip="#RRGGBB 색상 코드"/>
                                     <Button Content="적용" Click="ApplyClockColor_Click" Padding="12,5" Margin="8,0,0,0"/>
                                     <Button Content="색상 선택…" Click="ChooseClockColor_Click" Padding="12,5" Margin="8,0,0,0"/>
                                     <Button Content="기본 색상" Click="ResetClockColor_Click" Padding="12,5" Margin="8,0,0,0"/>
                                 </WrapPanel>
-                                <TextBlock x:Name="ClockColorStatusText" Foreground="#F2C97D" FontSize="11" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="ClockColorStatusText" Foreground="{StaticResource WarningBrush}" FontSize="11" TextWrapping="Wrap"/>
                                 <ListBox x:Name="ClockStyleList" SelectionMode="Single"
                                          SelectionChanged="ClockStyleList_SelectionChanged"
                                          ScrollViewer.VerticalScrollBarVisibility="Disabled"
@@ -639,7 +668,7 @@
                                             <Setter Property="Template">
                                                 <Setter.Value>
                                                     <ControlTemplate TargetType="ListBoxItem">
-                                                        <Border x:Name="ClockCard" Background="#171D2B" BorderBrush="#343D50" BorderThickness="2" CornerRadius="10">
+                                                        <Border x:Name="ClockCard" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="2" CornerRadius="10">
                                                             <ContentPresenter/>
                                                         </Border>
                                                         <ControlTemplate.Triggers>
@@ -647,7 +676,7 @@
                                                                 <Setter TargetName="ClockCard" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
                                                             </Trigger>
                                                             <Trigger Property="IsMouseOver" Value="True">
-                                                                <Setter TargetName="ClockCard" Property="Background" Value="#222B3D"/>
+                                                                <Setter TargetName="ClockCard" Property="Background" Value="{StaticResource SurfaceHoverBrush}"/>
                                                             </Trigger>
                                                         </ControlTemplate.Triggers>
                                                     </ControlTemplate>
@@ -661,9 +690,9 @@
                                                 <Border Height="128" Margin="6" CornerRadius="7" ClipToBounds="True">
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="0.5,1">
-                                                            <GradientStop Color="#464F83" Offset="0"/>
-                                                            <GradientStop Color="#9D78A3" Offset="0.65"/>
-                                                            <GradientStop Color="#C2A0B4" Offset="1"/>
+                                                            <GradientStop Color="#4F6962" Offset="0"/>
+                                                            <GradientStop Color="#8B727B" Offset="0.65"/>
+                                                            <GradientStop Color="#BA9CA7" Offset="1"/>
                                                         </LinearGradientBrush>
                                                     </Border.Background>
                                                     <ContentControl Content="{Binding Preview}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
@@ -692,7 +721,7 @@
                         <Border Margin="0,0,0,0"
                                 Background="{StaticResource SurfaceBrush}"
                                 CornerRadius="12"
-                                Padding="22">
+                                Padding="22" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                             <StackPanel>
                                 <Grid>
                                     <StackPanel>
@@ -748,7 +777,7 @@
                                 <TextBlock Text="Dock은 일반 앱 뒤로 내려갑니다. 필요할 때 Alt + `(숫자 1 왼쪽 키)로 앞으로 불러올 수 있습니다. 작업표시줄 표시를 끄면 Another Surface 실행 중 숨겨지고 종료·비정상 종료 감지 시 복원됩니다."
                                            Margin="0,13,0,0"
                                            TextWrapping="Wrap"
-                                           Foreground="#F2C97D"
+                                           Foreground="{StaticResource WarningBrush}"
                                            FontSize="11"/>
                             </StackPanel>
                         </Border>
@@ -756,7 +785,7 @@
                         <Border Margin="0,16,0,12"
                                 Background="{StaticResource SurfaceBrush}"
                                 CornerRadius="12"
-                                Padding="22">
+                                Padding="22" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                             <StackPanel>
                                 <Grid>
                                     <StackPanel>
@@ -828,8 +857,8 @@
                                 <Border Margin="0,0,0,12"
                                         Padding="13"
                                         CornerRadius="9"
-                                        Background="#141A28"
-                                        BorderBrush="#283247"
+                                        Background="{StaticResource InputBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}"
                                         BorderThickness="1">
                                     <StackPanel>
                                         <TextBlock Text="Dock 기본 항목"
@@ -845,7 +874,7 @@
                                                     <Border Margin="0,3,0,0"
                                                             Padding="9"
                                                             CornerRadius="7"
-                                                            Background="#1A2131">
+                                                            Background="{StaticResource SurfaceHoverBrush}">
                                                         <Grid>
                                                             <Grid.ColumnDefinitions>
                                                                 <ColumnDefinition Width="170"/>
@@ -889,7 +918,7 @@
                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
-                                            <Border Background="#171C2B"
+                                            <Border Background="{StaticResource InputBrush}"
                                                     CornerRadius="8"
                                                     Padding="12">
                                                 <Grid>
@@ -902,13 +931,13 @@
                                                     <Border Width="30"
                                                             Height="30"
                                                             CornerRadius="6"
-                                                            Background="#183A4C">
+                                                            Background="{StaticResource AccentSoftBrush}">
                                                         <TextBlock Text="{Binding Slot}"
                                                                    HorizontalAlignment="Center"
                                                                    VerticalAlignment="Center"
                                                                    FontFamily="Consolas"
                                                                    FontWeight="Bold"
-                                                                   Foreground="#8FFAFF"/>
+                                                                   Foreground="{StaticResource AccentBrush}"/>
                                                     </Border>
                                                     <StackPanel Grid.Column="1"
                                                                 Margin="5,0,12,0"
@@ -967,7 +996,7 @@
                 <Border Grid.Row="2"
                         Background="{StaticResource SurfaceBrush}"
                         CornerRadius="12"
-                        Padding="24">
+                        Padding="24" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                     <ScrollViewer VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="0,0,12,0">
