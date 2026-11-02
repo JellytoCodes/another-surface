@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/AnotherSurface.App/Assets/Brand/another-surface-dock-icon-v3.png" width="112" alt="초미 Another Surface 아이콘" />
+  <img src="src/AnotherSurface.App/Assets/Brand/another-surface-dock-icon-v3.png" width="400" alt="초미 Another Surface 아이콘" />
 </p>
 <h1 align="center">Another Surface</h1>
 <p align="center">월페이퍼 · 위젯 · 스티커 · Dock<br />0.10.5 · Windows x64</p>
