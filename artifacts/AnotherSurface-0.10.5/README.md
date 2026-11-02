@@ -2,7 +2,7 @@
   <img src="src/AnotherSurface.App/Assets/Brand/another-surface-dock-icon-v3.png" width="112" alt="초미 Another Surface 아이콘" />
 </p>
 <h1 align="center">Another Surface</h1>
-<p align="center">월페이퍼 · 위젯 · 스티커 · Dock<br />0.10.4 · Windows x64</p>
+<p align="center">월페이퍼 · 위젯 · 스티커 · Dock<br />0.10.5 · Windows x64</p>
 
 ## 주요 기능
 
@@ -18,7 +18,7 @@
 ## 실행
 
 - **환경:** Windows 10 1809 이상 / Windows 11, x64, .NET 8 Desktop Runtime
-- **실행 파일:** [`artifacts/AnotherSurface-0.10.4/AnotherSurface.App.exe`](artifacts/AnotherSurface-0.10.4/)
+- **실행 파일:** [`artifacts/AnotherSurface-0.10.5/AnotherSurface.App.exe`](artifacts/AnotherSurface-0.10.5/)
 - **배포 폴더 전체 유지:** DLL·Assets·네이티브 렌더러 필요
 - **지원 형식:** JPG, JPEG, PNG, BMP, GIF, MP4, WebM
 - **영상 최적화:** FFmpeg·FFprobe 선택 사용
