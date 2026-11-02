@@ -1,15 +1,15 @@
 <p align="center">
-  <img src="src/AnotherSurface.App/Assets/Brand/another-surface-dock-icon-v3.png" width="112" alt="초미 Another Surface 아이콘" />
+  <img src="src/AnotherSurface.App/Assets/Brand/another-surface-dock-icon-v3.png" width="400" alt="초미 Another Surface 아이콘" />
 </p>
 <h1 align="center">Another Surface</h1>
-<p align="center">월페이퍼 · 위젯 · 스티커 · Dock<br />0.10.5 · Windows x64</p>
+<p align="center">월페이퍼 · 위젯 · 스티커 · Dock<br />0.10.6 · Windows x64</p>
 
 ## 주요 기능
 
 | 기능 | 내용 |
 | --- | --- |
-| 월페이퍼 | 이미지·GIF·영상 등록, 화면 맞춤·색상·음량 조절 |
-| 다중 모니터 | 화면별 배경 지정, 재생 상태와 설정 저장·복원 |
+| 월페이퍼 | 이미지·GIF·영상 등록, 이름 변경·검색, 색상 조절 |
+| 다중 모니터 | 화면별 배경·화면 맞춤·음소거·볼륨 지정, 재생 상태와 설정 저장·복원 |
 | 시계 | 아날로그 2종·디지털 3종, 색상·크기·위치 변경 |
 | 시스템 정보 | CPU·GPU·RAM 추이, 디스크 사용량, 표시 항목·색상 조절 |
 | 스티커 | 기본 이미지 25종, 여러 장 배치·이동·크기·회전·겹침 순서 조절 |
@@ -18,7 +18,7 @@
 ## 실행
 
 - **환경:** Windows 10 1809 이상 / Windows 11, x64, .NET 8 Desktop Runtime
-- **실행 파일:** [`artifacts/AnotherSurface-0.10.5/AnotherSurface.App.exe`](artifacts/AnotherSurface-0.10.5/)
+- **실행 파일:** [`artifacts/AnotherSurface-0.10.6/AnotherSurface.App.exe`](artifacts/AnotherSurface-0.10.6/)
 - **배포 폴더 전체 유지:** DLL·Assets·네이티브 렌더러 필요
 - **지원 형식:** JPG, JPEG, PNG, BMP, GIF, MP4, WebM
 - **영상 최적화:** FFmpeg·FFprobe 선택 사용
