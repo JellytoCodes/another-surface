@@ -26,7 +26,7 @@
             <Grid Margin="18,24,18,20">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="26"/>
+                    <RowDefinition Height="18"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
@@ -54,7 +54,7 @@
                             AutomationProperties.Name="월페이퍼" Click="WallpaperNavigation_Click">
                         <StackPanel Orientation="Horizontal">
                             <Image Source="pack://siteoforigin:,,,/Assets/Brand/Navigation/wallpaper.png"
-                                   Width="32" Height="32" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                   Width="48" Height="48" RenderOptions.BitmapScalingMode="HighQuality"/>
                             <TextBlock Text="월페이퍼" Margin="13,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -62,7 +62,7 @@
                             AutomationProperties.Name="위젯" Click="WidgetsNavigation_Click">
                         <StackPanel Orientation="Horizontal">
                             <Image Source="pack://siteoforigin:,,,/Assets/Brand/Navigation/widgets.png"
-                                   Width="32" Height="32" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                   Width="48" Height="48" RenderOptions.BitmapScalingMode="HighQuality"/>
                             <TextBlock Text="위젯" Margin="13,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -70,7 +70,7 @@
                             AutomationProperties.Name="Dock" Click="DockNavigation_Click">
                         <StackPanel Orientation="Horizontal">
                             <Image Source="pack://siteoforigin:,,,/Assets/Brand/Navigation/dock.png"
-                                   Width="32" Height="32" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                   Width="48" Height="48" RenderOptions.BitmapScalingMode="HighQuality"/>
                             <TextBlock Text="Dock" Margin="13,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -78,7 +78,7 @@
                             AutomationProperties.Name="설정" Click="SettingsNavigation_Click">
                         <StackPanel Orientation="Horizontal">
                             <Image Source="pack://siteoforigin:,,,/Assets/Brand/Navigation/settings.png"
-                                   Width="32" Height="32" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                   Width="48" Height="48" RenderOptions.BitmapScalingMode="HighQuality"/>
                             <TextBlock Text="설정" Margin="13,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
