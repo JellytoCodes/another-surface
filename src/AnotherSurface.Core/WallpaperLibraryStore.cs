@@ -32,7 +32,8 @@ public sealed class WallpaperLibraryStore
         int maximumWidth,
         int maximumHeight,
         CancellationToken cancellationToken = default,
-        bool optimize = true)
+        bool optimize = true,
+        WallpaperFit fit = WallpaperFit.Fit)
     {
         ArgumentNullException.ThrowIfNull(wallpaper);
         if (wallpaper.Kind != WallpaperKind.Video ||
@@ -55,7 +56,8 @@ public sealed class WallpaperLibraryStore
             wallpaper,
             maximumWidth,
             maximumHeight,
-            cancellationToken).ConfigureAwait(false)
+            cancellationToken,
+            fit).ConfigureAwait(false)
             : new VideoPlaybackPreparation(wallpaper.Copy(), false, false, "원본 월페이퍼를 사용합니다.");
     }
 

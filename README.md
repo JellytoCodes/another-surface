@@ -2,7 +2,7 @@
   <img src="src/AnotherSurface.App/Assets/Brand/another-surface-dock-icon-v3.png" width="400" alt="초미 Another Surface 아이콘" />
 </p>
 <h1 align="center">Another Surface</h1>
-<p align="center">월페이퍼 · 위젯 · 스티커 · Dock<br />0.10.6 · Windows x64</p>
+<p align="center">월페이퍼 · 위젯 · 스티커 · Dock<br />0.10.7 · Windows x64</p>
 
 ## 주요 기능
 
@@ -18,7 +18,7 @@
 ## 실행
 
 - **환경:** Windows 10 1809 이상 / Windows 11, x64, .NET 8 Desktop Runtime
-- **실행 파일:** [`artifacts/AnotherSurface-0.10.6/AnotherSurface.App.exe`](artifacts/AnotherSurface-0.10.6/)
+- **실행 파일:** [`artifacts/AnotherSurface-0.10.7/AnotherSurface.App.exe`](artifacts/AnotherSurface-0.10.7/)
 - **배포 폴더 전체 유지:** DLL·Assets·네이티브 렌더러 필요
 - **지원 형식:** JPG, JPEG, PNG, BMP, GIF, MP4, WebM
 - **영상 최적화:** FFmpeg·FFprobe 선택 사용
@@ -65,4 +65,6 @@ Set-Location Another-Surface
 - 설정·라이브러리: `%LocalAppData%\Another Surface` — 기존 설치는 `Vellume` 폴더를 이어서 사용
 - 월페이퍼의 자동 전체 화면 감지·일시정지는 미지원. 수동 재생 제어 지원
 - 영상 재생은 Windows 코덱 환경에 따라 차이 발생
+- 영상 최적화의 ‘채우기’ 캐시는 표시 밖 영역을 미리 잘라 디코딩량을 줄이며, 맞춤 변경 시 해당 캐시를 다시 선택
+- GPU 위젯은 물리 GPU 엔진별 프로세스 사용량을 합산한 뒤 가장 바쁜 엔진을 표시. 측정 시점 차이로 작업 관리자와 순간값 차이는 발생 가능
 - 시스템 정보 위젯 배치 참고: [SysDash](https://github.com/marcopixel/SysDash)

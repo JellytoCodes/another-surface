@@ -40,7 +40,7 @@ public sealed class VideoProxyCache
     public const long DefaultMaximumCacheBytes = 2L * 1024 * 1024 * 1024;
     public static readonly TimeSpan DefaultUnusedCacheAge = TimeSpan.FromDays(30);
     private const string CacheDirectoryName = ".another-surface-cache";
-    private const string ProxyRevision = "v2";
+    private const string ProxyRevision = "v3";
     private readonly string? _ffmpegPath;
     private readonly string? _ffprobePath;
 
@@ -156,7 +156,8 @@ public sealed class VideoProxyCache
         WallpaperItem wallpaper,
         int maximumWidth,
         int maximumHeight,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        WallpaperFit fit = WallpaperFit.Fit)
     {
         ArgumentNullException.ThrowIfNull(wallpaper);
         var playback = wallpaper.Copy();
@@ -183,7 +184,9 @@ public sealed class VideoProxyCache
             CacheDirectoryName);
         var proxyPath = Path.Combine(
             cacheDirectory,
-            $"video-{maximumWidth}x{maximumHeight}-{MaximumFramesPerSecond}fps-h264-{ProxyRevision}.mp4");
+            fit == WallpaperFit.Fill
+                ? $"video-{maximumWidth}x{maximumHeight}-{MaximumFramesPerSecond}fps-h264-fill-v3.mp4"
+                : $"video-{maximumWidth}x{maximumHeight}-{MaximumFramesPerSecond}fps-h264-{ProxyRevision}.mp4");
         if (IsFreshProxy(sourcePath, proxyPath))
         {
             TouchProxy(proxyPath);
@@ -218,8 +221,10 @@ public sealed class VideoProxyCache
                 playback,
                 "영상 정보를 읽지 못해 원본 영상을 사용합니다.");
         }
+        var size = metadata is null ? default : GetOptimizedSize(metadata, maximumWidth, maximumHeight, fit);
+        var cropsHiddenPixels = size.Width != size.ScaledWidth || size.Height != size.ScaledHeight;
         if (metadata is null ||
-            !metadata.NeedsOptimization(maximumWidth, maximumHeight))
+            (!metadata.NeedsOptimization(maximumWidth, maximumHeight) && !cropsHiddenPixels))
         {
             return Original(
                 playback,
@@ -243,8 +248,10 @@ public sealed class VideoProxyCache
             var converted = await TryConvertWithNvencAsync(
                     sourcePath,
                     temporaryPath,
-                    maximumWidth,
-                    maximumHeight,
+                    size.ScaledWidth,
+                    size.ScaledHeight,
+                    size.Width,
+                    size.Height,
                     targetFrameRate,
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -254,8 +261,10 @@ public sealed class VideoProxyCache
                 converted = await TryConvertWithSoftwareAsync(
                         sourcePath,
                         temporaryPath,
-                        maximumWidth,
-                        maximumHeight,
+                        size.ScaledWidth,
+                        size.ScaledHeight,
+                        size.Width,
+                        size.Height,
                         targetFrameRate,
                         cancellationToken)
                     .ConfigureAwait(false);
@@ -279,7 +288,7 @@ public sealed class VideoProxyCache
                 UsedProxy: true,
                 GeneratedProxy: true,
                 $"{metadata.Width}×{metadata.Height} {metadata.Codec} 영상을 " +
-                $"{maximumWidth}×{maximumHeight} H.264 재생 캐시로 최적화했습니다.");
+                $"{size.Width}×{size.Height} H.264 재생 캐시로 최적화했습니다.");
         }
         catch (OperationCanceledException)
         {
@@ -297,6 +306,28 @@ public sealed class VideoProxyCache
 
     public static bool IsEfficientPlaybackCodec(string? codec)
         => codec?.Trim().ToLowerInvariant() is "h264" or "hevc";
+
+    internal static (int ScaledWidth, int ScaledHeight, int Width, int Height) GetOptimizedSize(
+        VideoStreamMetadata source, int maximumWidth, int maximumHeight, WallpaperFit fit)
+    {
+        // Keep the old proxy's visible pixel density. Fill discards the outer
+        // source region anyway, so crop it once in the cache instead of decoding
+        // it on every loop. Fit/Stretch retain the entire source image.
+        var scale = Math.Min(1d, Math.Min((double)maximumWidth / source.Width, (double)maximumHeight / source.Height));
+        var scaledWidth = MakeEven(Math.Max(2, (int)Math.Floor(source.Width * scale)));
+        var scaledHeight = MakeEven(Math.Max(2, (int)Math.Floor(source.Height * scale)));
+        var width = scaledWidth;
+        var height = scaledHeight;
+        if (fit == WallpaperFit.Fill)
+        {
+            var aspect = (double)maximumWidth / maximumHeight;
+            // Round outward to keep all pixels visible in the original crop;
+            // the renderer resolves the subpixel edge just as before.
+            width = Math.Min(width, Math.Max(2, (int)Math.Ceiling(height * aspect / 2) * 2));
+            height = Math.Min(height, Math.Max(2, (int)Math.Ceiling(width / aspect / 2) * 2));
+        }
+        return (scaledWidth, scaledHeight, width, height);
+    }
 
     private async Task<VideoStreamMetadata?> ProbeAsync(
         string sourcePath,
@@ -354,17 +385,23 @@ public sealed class VideoProxyCache
         string outputPath,
         int maximumWidth,
         int maximumHeight,
+        int croppedWidth,
+        int croppedHeight,
         double frameRate,
         CancellationToken cancellationToken)
     {
-        var filter =
-            $"scale_cuda={maximumWidth}:{maximumHeight}:" +
-            "force_original_aspect_ratio=decrease:force_divisible_by=2";
+        var crops = croppedWidth != maximumWidth || croppedHeight != maximumHeight;
+        var filter = crops
+            ? $"scale={maximumWidth}:{maximumHeight},crop={croppedWidth}:{croppedHeight},format=yuv420p"
+            : $"scale_cuda={maximumWidth}:{maximumHeight}";
+        // Cropping uses the standard filter on downloaded decoded frames. This
+        // cost is paid once while caching; playback decodes only the result.
+        var decode = crops ? new[] { "-hwaccel", "cuda" }
+            : new[] { "-hwaccel", "cuda", "-hwaccel_output_format", "cuda" };
         return RunConversionAsync(
             [
                 "-y", "-hide_banner", "-loglevel", "error",
-                "-hwaccel", "cuda",
-                "-hwaccel_output_format", "cuda",
+                .. decode,
                 "-i", sourcePath,
                 "-map", "0:v:0",
                 "-map", "0:a?",
@@ -391,13 +428,13 @@ public sealed class VideoProxyCache
         string outputPath,
         int maximumWidth,
         int maximumHeight,
+        int croppedWidth,
+        int croppedHeight,
         double frameRate,
         CancellationToken cancellationToken)
     {
-        var filter =
-            $"scale={maximumWidth}:{maximumHeight}:" +
-            "force_original_aspect_ratio=decrease:force_divisible_by=2," +
-            "format=yuv420p";
+        var filter = $"scale={maximumWidth}:{maximumHeight}," +
+            $"crop={croppedWidth}:{croppedHeight},format=yuv420p";
         return RunConversionAsync(
             [
                 "-y", "-hide_banner", "-loglevel", "error",
@@ -658,7 +695,7 @@ public sealed class VideoProxyCache
                 // Only generated complete proxies, never original media, partial files,
                 // arbitrary nested content or linked files/directories.
                 if (Regex.IsMatch(Path.GetFileName(path),
-                        @"^(video-\d+x\d+-\d+fps-h264-v\d+|segment-[a-f0-9]{64}-v1)\.mp4$",
+                        @"^(video-\d+x\d+-\d+fps-h264-(fill-)?v\d+|segment-[a-f0-9]{64}-v1)\.mp4$",
                         RegexOptions.CultureInvariant) && !IsReparsePoint(path))
                 {
                     candidates.Add(new FileInfo(path));

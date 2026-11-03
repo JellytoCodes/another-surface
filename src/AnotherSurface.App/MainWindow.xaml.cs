@@ -416,7 +416,8 @@ public partial class MainWindow : Window
                     display.Width,
                     display.Height,
                     cancellation.Token,
-                    optimize: playback.UseOptimizedVideo);
+                    optimize: playback.UseOptimizedVideo,
+                    fit: playback.Fit);
                 playbackWallpaper = preparation.Wallpaper;
                 generatedProxy = preparation.GeneratedProxy;
                 await _logger.InfoAsync(
@@ -1400,6 +1401,14 @@ public partial class MainWindow : Window
         var profile = _settings.GetOrCreateDisplayProfile(display.Id);
         profile.Playback.Fit = option.Value;
         _settings.Playback = profile.Playback.Copy();
+        if (profile.Wallpaper?.Kind == WallpaperKind.Video && profile.Playback.UseOptimizedVideo)
+        {
+            // Fill caches omit off-screen pixels. Changing fit must select a
+            // fresh full-frame/cropped source rather than stretch the old crop.
+            await ApplyWallpaperAsync(profile.Wallpaper, targetDisplay: display);
+            await SaveSettingsAsync();
+            return;
+        }
         await _wallpaperController.UpdateDisplayPlaybackAsync(
             display.Id,
             profile.Playback.Copy());

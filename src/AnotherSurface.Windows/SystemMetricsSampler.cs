@@ -7,7 +7,7 @@ internal sealed class SystemMetricsSampler : IDisposable
 {
     private const uint PdhFormatDouble = 0x00000200;
     private const uint PdhMoreData = 0x800007D2;
-    private const long GpuSampleIntervalMilliseconds = 2_000;
+    private const long GpuSampleIntervalMilliseconds = 1_000;
     private const long DriveSampleIntervalMilliseconds = 30_000;
     private ulong _previousIdle;
     private ulong _previousKernel;
@@ -39,7 +39,7 @@ internal sealed class SystemMetricsSampler : IDisposable
         {
             GpuSampleCount++;
             _lastGpuUsage = SampleGpuUsage();
-            _lastGpuSampleTick = Environment.TickCount64;
+            _lastGpuSampleTick = now;
         }
         if (_lastDriveSampleTick == 0 ||
             now - _lastDriveSampleTick >= DriveSampleIntervalMilliseconds)
@@ -206,8 +206,7 @@ internal sealed class SystemMetricsSampler : IDisposable
 
             var itemSize =
                 Marshal.SizeOf<PdhFormattedCounterValueItem>();
-            double maximumUsage = 0;
-            var hasValidValue = false;
+            var samples = new List<(string Instance, double Usage)>((int)itemCount);
             for (var index = 0; index < itemCount; index++)
             {
                 var item =
@@ -220,13 +219,12 @@ internal sealed class SystemMetricsSampler : IDisposable
                     continue;
                 }
 
-                hasValidValue = true;
-                maximumUsage = Math.Max(
-                    maximumUsage,
-                    item.Value.DoubleValue);
+                var instance = Marshal.PtrToStringUni(item.Name);
+                if (instance is not null)
+                    samples.Add((instance, item.Value.DoubleValue));
             }
 
-            return hasValidValue ? maximumUsage : null;
+            return AggregateGpuUsage(samples);
         }
         catch (DllNotFoundException)
         {
@@ -238,6 +236,25 @@ internal sealed class SystemMetricsSampler : IDisposable
             Dispose();
             return null;
         }
+    }
+
+    internal static double? AggregateGpuUsage(IEnumerable<(string Instance, double Usage)> samples)
+    {
+        // PDH exposes one instance per process and physical GPU engine. Task
+        // Manager totals processes on each engine, then reports the busiest
+        // engine. Taking the largest process undercounts concurrent workloads;
+        // summing different engines would overcount parallel GPU work.
+        var engines = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (instance, usage) in samples)
+        {
+            if (!double.IsFinite(usage) || usage < 0) continue;
+            var start = instance.IndexOf("luid_", StringComparison.OrdinalIgnoreCase);
+            var end = instance.IndexOf("_engtype_", StringComparison.OrdinalIgnoreCase);
+            if (start < 0 || end <= start) continue;
+            var engine = instance[start..end];
+            engines[engine] = engines.GetValueOrDefault(engine) + usage;
+        }
+        return engines.Count == 0 ? null : Math.Clamp(engines.Values.Max(), 0, 100);
     }
 
     private void EnsureGpuBuffer(uint requiredSize)

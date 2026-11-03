@@ -4,6 +4,51 @@ namespace AnotherSurface.Tests;
 
 public sealed class VideoProxyCacheTests : IDisposable
 {
+    [Theory]
+    [InlineData(3840, 2160, 3440, 1440, WallpaperFit.Fill, 2560, 1440, 2560, 1072)]
+    [InlineData(1920, 1080, 3440, 1440, WallpaperFit.Fill, 1920, 1080, 1920, 804)]
+    [InlineData(1920, 1080, 3440, 1440, WallpaperFit.Fit, 1920, 1080, 1920, 1080)]
+    [InlineData(1920, 1080, 3440, 1440, WallpaperFit.Stretch, 1920, 1080, 1920, 1080)]
+    [InlineData(1280, 720, 3840, 2160, WallpaperFit.Fill, 1280, 720, 1280, 720)]
+    [InlineData(1080, 1920, 1920, 1080, WallpaperFit.Fill, 606, 1080, 606, 342)]
+    public void PlaybackSize_DropsOnlyHiddenFillPixelsAndNeverUpscales(
+        int sourceWidth, int sourceHeight, int displayWidth, int displayHeight,
+        WallpaperFit fit, int scaledWidth, int scaledHeight, int width, int height)
+    {
+        var size = VideoProxyCache.GetOptimizedSize(
+            new VideoStreamMetadata("h264", sourceWidth, sourceHeight, 60), displayWidth, displayHeight, fit);
+        Assert.Equal((scaledWidth, scaledHeight, width, height), size);
+        Assert.InRange(size.Width, 2, sourceWidth);
+        Assert.InRange(size.Height, 2, sourceHeight);
+    }
+
+    [Fact]
+    public async Task FillCache_DoesNotReplaceFitCacheAndBothAreRecognizedByCleanup()
+    {
+        var itemDirectory = Path.Combine(_temporaryDirectory, Guid.NewGuid().ToString("N"));
+        var cacheDirectory = Path.Combine(itemDirectory, ".another-surface-cache");
+        Directory.CreateDirectory(cacheDirectory);
+        var source = Path.Combine(itemDirectory, "original.mp4");
+        var fullFrame = Path.Combine(cacheDirectory, "video-3440x1440-30fps-h264-v3.mp4");
+        var cropped = Path.Combine(cacheDirectory, "video-3440x1440-30fps-h264-fill-v3.mp4");
+        await File.WriteAllBytesAsync(source, [1, 2, 3]);
+        await File.WriteAllBytesAsync(fullFrame, [4, 5, 6]);
+        await File.WriteAllBytesAsync(cropped, [7, 8, 9]);
+        File.SetLastWriteTimeUtc(source, DateTime.UtcNow.AddMinutes(-2));
+        var item = new WallpaperItem { SourcePath = source, Kind = WallpaperKind.Video, IsManaged = true };
+        var cache = new VideoProxyCache();
+        var fill = await cache.PrepareAsync(item, 3440, 1440, fit: WallpaperFit.Fill);
+        var fit = await cache.PrepareAsync(item, 3440, 1440, fit: WallpaperFit.Fit);
+        Assert.Equal(cropped, fill.Wallpaper.SourcePath);
+        Assert.Equal(fullFrame, fit.Wallpaper.SourcePath);
+        Assert.Equal(source, item.SourcePath);
+        var cleanup = VideoProxyCache.Cleanup(_temporaryDirectory, [cropped], 0, TimeSpan.Zero, CancellationToken.None);
+        Assert.True(File.Exists(source));
+        Assert.True(File.Exists(cropped));
+        Assert.False(File.Exists(fullFrame));
+        Assert.Equal(1, cleanup.RemovedFiles);
+    }
+
     private readonly string _temporaryDirectory = Path.Combine(
         Path.GetTempPath(),
         $"AnotherSurfaceVideoProxyTests-{Guid.NewGuid():N}");
@@ -45,7 +90,7 @@ public sealed class VideoProxyCacheTests : IDisposable
         var sourcePath = Path.Combine(itemDirectory, "original.mp4");
         var proxyPath = Path.Combine(
             cacheDirectory,
-            "video-1920x1080-30fps-h264-v2.mp4");
+            "video-1920x1080-30fps-h264-v3.mp4");
         await File.WriteAllBytesAsync(sourcePath, [1, 2, 3]);
         await File.WriteAllBytesAsync(proxyPath, [9, 8, 7]);
         File.SetLastWriteTimeUtc(
@@ -171,7 +216,7 @@ public sealed class VideoProxyCacheTests : IDisposable
     public async Task Cleanup_EvictsLeastRecentlyUsedVariantsToMeetBudget()
     {
         var itemId = Guid.NewGuid();
-        var reused = CreateProxy(itemId, "video-1920x1080-30fps-h264-v2.mp4", 10, 3);
+        var reused = CreateProxy(itemId, "video-1920x1080-30fps-h264-v3.mp4", 10, 3);
         var unused = CreateProxy(itemId, "video-2752x1152-30fps-h264-v2.mp4", 10, 2);
         var sourcePath = Path.Combine(_temporaryDirectory, itemId.ToString("N"), "original.mp4");
         await File.WriteAllBytesAsync(sourcePath, [1]);
