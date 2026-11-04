@@ -141,12 +141,11 @@ public sealed class ApplicationIconTests
             return;
         }
 
-        var assemblyPath = Path.Combine(
-            Path.GetDirectoryName(executable)!, "AnotherSurface.App.dll");
+        var assemblyPath = Path.ChangeExtension(executable, ".dll");
         Assert.True(File.Exists(assemblyPath), assemblyPath);
         // Loading metadata/resources does not instantiate Application or run Main.
         var assembly = Assembly.LoadFrom(assemblyPath);
-        using var stream = assembly.GetManifestResourceStream("AnotherSurface.App.g.resources");
+        using var stream = assembly.GetManifestResourceStream(assembly.GetName().Name + ".g.resources");
         Assert.NotNull(stream);
         using var resources = new ResourceReader(stream);
         var entries = resources.GetEnumerator();
