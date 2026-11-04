@@ -358,20 +358,20 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task ApplyWallpaperAsync(
+    private async Task<bool> ApplyWallpaperAsync(
         WallpaperItem wallpaper,
         bool showDialogOnError = true,
         DisplayInfo? targetDisplay = null)
     {
         if (!await _wallpaperApplyGate.WaitAsync(0))
         {
-            return;
+            return false;
         }
 
         if (_runtimeClosing)
         {
             _wallpaperApplyGate.Release();
-            return;
+            return false;
         }
 
         using var cancellation = new CancellationTokenSource();
@@ -392,7 +392,7 @@ public partial class MainWindow : Window
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
             }
-            return;
+            return false;
         }
 
         try
@@ -468,12 +468,13 @@ public partial class MainWindow : Window
             HomeStatusText.Text = $"'{wallpaper.Name}'을(를) {display.Name}에 적용했습니다.";
             await SaveSettingsAsync();
             await MaintainVideoCacheAsync(force: generatedProxy);
+            return true;
         }
         catch (OperationCanceledException)
             when (_runtimeClosing ||
                   cancellation.IsCancellationRequested)
         {
-            // Exit cancels an in-flight RenderHost request so shutdown never
+            // Exit cancels in-flight playback initialization so shutdown never
             // waits behind the wallpaper operation lock.
         }
         catch (Exception exception)
@@ -500,6 +501,7 @@ public partial class MainWindow : Window
             _applyingDisplayId = null;
             IsWallpaperApplying = false;
         }
+        return false;
     }
 
     private async Task SaveSettingsAsync()
@@ -1538,6 +1540,8 @@ public partial class MainWindow : Window
     {
         var handle = new WindowInteropHelper(this).Handle;
         _windowSource = HwndSource.FromHwnd(handle);
+        if (_windowSource?.CompositionTarget is { } target)
+            target.RenderMode = RenderMode.SoftwareOnly;
         _windowSource?.AddHook(WindowMessageHook);
         _quickSlotRuntimeService.Attach(handle);
         var registered = _hotkeyManager.Register(handle);
@@ -2466,6 +2470,12 @@ public partial class MainWindow : Window
 
     private async Task RestoreDisplayWallpapersAsync()
     {
+        // Displays and Explorer may become available after the Run command.
+        for (var attempt = 0; Displays.Count == 0 && attempt < 10 && !_runtimeClosing; attempt++)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(1), _libraryLifetime.Token);
+            RefreshDisplays();
+        }
         var originallySelected =
             DisplayList.SelectedItem as DisplayInfo ??
             Displays.FirstOrDefault(display => display.IsPrimary);
@@ -2490,10 +2500,15 @@ public partial class MainWindow : Window
                                 candidate.Id == profile.Wallpaper.Id) ??
                             profile.Wallpaper;
 
-            await ApplyWallpaperAsync(
-                wallpaper,
-                showDialogOnError: false,
-                targetDisplay: display);
+            for (var attempt = 0; attempt < 3 && !_runtimeClosing; attempt++)
+            {
+                if (await ApplyWallpaperAsync(wallpaper, showDialogOnError: false, targetDisplay: display)) break;
+                if (attempt < 2)
+                {
+                    await _logger.InfoAsync($"디스플레이 {display.Name} 복원을 다시 시도합니다 ({attempt + 2}/3).");
+                    await Task.Delay(TimeSpan.FromSeconds(2 * (attempt + 1)), _libraryLifetime.Token);
+                }
+            }
         }
 
         if (originallySelected is not null)

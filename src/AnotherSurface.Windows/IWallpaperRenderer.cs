@@ -3,9 +3,7 @@ using AnotherSurface.Core;
 namespace AnotherSurface.Windows;
 
 /// <summary>
-/// Separates wallpaper playback from the controller so GPU-backed renderers
-/// can live in a disposable child process while the tray and settings remain
-/// available.
+/// Keeps per-display playback behind a shared in-process rendering thread.
 /// </summary>
 internal interface IWallpaperRenderer
 {

@@ -291,6 +291,8 @@ public partial class DockWindow : Window, INotifyPropertyChanged, IDisposable
     {
         var handle = new WindowInteropHelper(this).Handle;
         _windowSource = HwndSource.FromHwnd(handle);
+        if (_windowSource?.CompositionTarget is { } target)
+            target.RenderMode = RenderMode.SoftwareOnly;
         EnableNonLayeredGlass(handle);
         _windowSource?.AddHook(WindowMessageHook);
         _dockRuntime.Attach(handle);

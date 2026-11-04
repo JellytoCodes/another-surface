@@ -6,7 +6,7 @@ namespace AnotherSurface.Windows;
 
 /// <summary>
 /// Keeps one primary-display controller for all desktop widgets and adds
-/// independent wallpaper renderer processes for secondary displays.
+/// independent in-process wallpaper surfaces for secondary displays.
 /// </summary>
 public sealed class MultiDisplayWallpaperController :
     IWallpaperController,

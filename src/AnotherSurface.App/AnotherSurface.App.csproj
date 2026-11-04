@@ -6,6 +6,8 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <AssemblyName>AnotherSurface</AssemblyName>
+    <RootNamespace>AnotherSurface.App</RootNamespace>
     <Product>Another Surface</Product>
     <Title>Another Surface</Title>
     <AssemblyTitle>Another Surface</AssemblyTitle>
@@ -21,9 +23,9 @@
     <!-- WPF owns startup; WinForms is used only for tray/dialog integration.
          DPI must be declared before WPF creates HWNDs, not via WinForms startup. -->
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
-    <Version>0.10.7</Version>
-    <FileVersion>0.10.7.0</FileVersion>
-    <AssemblyVersion>0.10.7.0</AssemblyVersion>
+    <Version>0.11.0</Version>
+    <FileVersion>0.11.0.0</FileVersion>
+    <AssemblyVersion>0.11.0.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -41,11 +43,6 @@
     </Content>
     <!-- Share the EXE artwork with WPF and NotifyIcon without a loose-file dependency. -->
     <Resource Include="Assets\Brand\another-surface-app.ico" />
-    <Content Include="..\AnotherSurface.Renderer.Native\bin\x64\$(Configuration)\AnotherSurface.Renderer.Native.exe"
-             Link="AnotherSurface.Renderer.Native.exe"
-             Condition="Exists('..\AnotherSurface.Renderer.Native\bin\x64\$(Configuration)\AnotherSurface.Renderer.Native.exe')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
   </ItemGroup>
 
 </Project>

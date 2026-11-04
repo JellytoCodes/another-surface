@@ -24,6 +24,7 @@ internal sealed class WallpaperRendererWindow : IWallpaperRenderer
     private string _nativeFallbackReason = string.Empty;
     private WallpaperRenderBackend _backend;
     private bool _windowVisibleRequested = true;
+    private bool _isRaisedDesktop;
     private bool _disposed;
 
     public nint Handle => _handle;
@@ -146,6 +147,7 @@ internal sealed class WallpaperRendererWindow : IWallpaperRenderer
         _height = display.Height;
         _displayX = display.X;
         _displayY = display.Y;
+        _isRaisedDesktop = isRaisedDesktop;
 
         if (_handle == nint.Zero || !NativeMethods.IsWindow(_handle))
         {
@@ -259,6 +261,7 @@ internal sealed class WallpaperRendererWindow : IWallpaperRenderer
 
         if (_backend == WallpaperRenderBackend.NativeVideo)
         {
+            UseVideoRedirectionSurface();
             LayoutNativeVideo();
         }
         else if (_backend == WallpaperRenderBackend.NativeGif &&
@@ -347,6 +350,16 @@ internal sealed class WallpaperRendererWindow : IWallpaperRenderer
         _playbackOptions = options.Copy();
         _nativeSourcePath = wallpaper.SourcePath;
         _nativeFallbackReason = string.Empty;
+
+        // The same HWND is reused when changing from video to an image/GIF
+        // or the WPF color-adjustment path. Restore its bitmap composition.
+        if (_isRaisedDesktop)
+        {
+            var style = NativeMethods.GetWindowLongPtr(_handle, NativeMethods.GwlExtendedStyle).ToInt64();
+            NativeMethods.SetWindowLongPtr(_handle, NativeMethods.GwlExtendedStyle, new nint(style | NativeMethods.WsExLayered));
+            if (!NativeMethods.SetLayeredWindowAttributes(_handle, 0, 255, NativeMethods.LwaAlpha))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows에서 확장 데스크톱 합성을 켜지 못했습니다.");
+        }
 
         if (wallpaper.Kind == WallpaperKind.Image)
         {
@@ -639,6 +652,7 @@ internal sealed class WallpaperRendererWindow : IWallpaperRenderer
     {
         CloseNativeVideoCore();
         CloseNativeGifCore();
+        UseVideoRedirectionSurface();
         _nativeVideoHandle = _handle;
         if (_nativeVideoHandle == nint.Zero ||
             !NativeMethods.IsWindow(_nativeVideoHandle))
@@ -650,6 +664,19 @@ internal sealed class WallpaperRendererWindow : IWallpaperRenderer
 
         // Media Engine draws directly into the existing wallpaper HWND.
         // Avoid creating another monitor-sized child composition surface.
+    }
+
+    private void UseVideoRedirectionSurface()
+    {
+        // Media Engine presents an opaque video surface. Retain ordinary DWM
+        // redirection, as the previous native backend did, without the bitmap
+        // renderer's additional layered-window composition path.
+        var style = NativeMethods.GetWindowLongPtr(_handle, NativeMethods.GwlExtendedStyle).ToInt64();
+        if ((style & NativeMethods.WsExLayered) == 0) return;
+        NativeMethods.SetWindowLongPtr(_handle, NativeMethods.GwlExtendedStyle, new nint(style & ~NativeMethods.WsExLayered));
+        NativeMethods.SetWindowPos(_handle, nint.Zero, 0, 0, 0, 0,
+            NativeMethods.SwpNoMove | NativeMethods.SwpNoSize | NativeMethods.SwpNoZOrder |
+            NativeMethods.SwpNoActivate | NativeMethods.SwpFrameChanged);
     }
 
     private void LayoutNativeVideo()

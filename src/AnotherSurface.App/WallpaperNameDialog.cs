@@ -15,7 +15,7 @@ internal sealed class WallpaperNameDialog : Window
     {
         Title = "월페이퍼 이름 변경";
         Icon = new System.Windows.Media.Imaging.BitmapImage(
-            new Uri("pack://application:,,,/AnotherSurface.App;component/Assets/Brand/another-surface-app.ico"));
+            new Uri("pack://application:,,,/AnotherSurface;component/Assets/Brand/another-surface-app.ico"));
         Width = 460;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;

@@ -1,9 +1,7 @@
 using System.Threading;
-using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Interop;
-using System.Windows.Media;
 using System.Windows.Threading;
 using Forms = System.Windows.Forms;
 using AnotherSurface.Core;
@@ -16,6 +14,9 @@ public partial class App : System.Windows.Application
     // Share the guard with pre-rename installs that use the same settings.
     private const string MutexName = @"Local\Vellume.Desktop.SingleInstance";
     private Mutex? _singleInstanceMutex;
+    private EventWaitHandle? _showWindowRequest;
+    private RegisteredWaitHandle? _showWindowWait;
+    private bool _showWindowPending;
     private Forms.NotifyIcon? _notifyIcon;
     private System.Drawing.Icon? _trayIcon;
     private Forms.ToolStripMenuItem? _playPauseMenuItem;
@@ -30,7 +31,6 @@ public partial class App : System.Windows.Application
     private MainWindow? _mainWindow;
     private DockWindow? _dockWindow;
     private TaskbarVisibilityController? _taskbarController;
-    private Process? _sessionRecoveryGuard;
     private string? _sessionMarkerPath;
     private string? _crashLogPath;
     private DispatcherTimer? _taskbarMaintainTimer;
@@ -39,86 +39,9 @@ public partial class App : System.Windows.Application
 
     protected override async void OnStartup(StartupEventArgs eventArgs)
     {
-        var isWallpaperRenderHost = eventArgs.Args.Contains(
-            "--wallpaper-render-host",
-            StringComparer.OrdinalIgnoreCase);
-        if (!isWallpaperRenderHost)
-        {
-            // Keep the long-lived settings, Dock and widget shell off the GPU.
-            // The disposable render-host child retains hardware acceleration.
-            RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
-        }
         base.OnStartup(eventArgs);
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
-
-        if (isWallpaperRenderHost)
-        {
-            var pipeName = GetStringArgument(
-                eventArgs.Args,
-                "--render-pipe");
-            var dataDirectory = GetStringArgument(
-                eventArgs.Args,
-                "--render-data");
-            var ownerProcessId =
-                GetIntegerArgument(
-                    eventArgs.Args,
-                    "--render-owner") ?? 0;
-            if (string.IsNullOrWhiteSpace(pipeName) ||
-                string.IsNullOrWhiteSpace(dataDirectory))
-            {
-                Shutdown(2);
-                return;
-            }
-
-            try
-            {
-                await WallpaperRenderHostServer.RunAsync(
-                    pipeName,
-                    dataDirectory,
-                    ownerProcessId);
-                Shutdown();
-            }
-            catch (Exception exception)
-            {
-                try
-                {
-                    var applicationDataDirectory =
-                        Path.GetDirectoryName(dataDirectory) ??
-                        dataDirectory;
-                    var logDirectory = Path.Combine(
-                        applicationDataDirectory,
-                        "Logs");
-                    Directory.CreateDirectory(logDirectory);
-                    File.AppendAllText(
-                        Path.Combine(
-                            logDirectory,
-                            "render-host.log"),
-                        $"{DateTimeOffset.Now:O} {exception}{Environment.NewLine}");
-                }
-                catch
-                {
-                    // The parent observes the pipe failure even when the
-                    // emergency local log cannot be written.
-                }
-                Shutdown(3);
-            }
-            return;
-        }
-
-        if (TryGetSessionGuardArguments(
-                eventArgs.Args,
-                out var sessionOwnerProcessId,
-                out var sessionMarkerPath,
-                out var recoveryAttempt))
-        {
-            await Task.Run(() =>
-                SessionRecoveryGuard.Run(
-                    sessionOwnerProcessId,
-                    sessionMarkerPath,
-                    recoveryAttempt));
-            Shutdown();
-            return;
-        }
+        Directory.SetCurrentDirectory(AppContext.BaseDirectory);
 
         var isNativeVideoSmokeTest = eventArgs.Args.Contains(
             "--smoke-test-active-video",
@@ -129,9 +52,6 @@ public partial class App : System.Windows.Application
                 StringComparer.OrdinalIgnoreCase);
         var isDockPreview = eventArgs.Args.Contains(
             "--dock-preview",
-            StringComparer.OrdinalIgnoreCase);
-        var isRecoveredSession = eventArgs.Args.Contains(
-            "--recovered-session",
             StringComparer.OrdinalIgnoreCase);
         var isWindowsStartup = eventArgs.Args.Contains(
             "--windows-startup",
@@ -144,14 +64,20 @@ public partial class App : System.Windows.Application
         _singleInstanceMutex = new Mutex(true, mutexName, out _ownsMutex);
         if (!_ownsMutex)
         {
-            System.Windows.MessageBox.Show(
-                "Another Surface가 이미 실행 중입니다. 시스템 트레이에서 열어주세요.",
-                "Another Surface",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            if (!isWindowsStartup)
+            {
+                try { using var request = EventWaitHandle.OpenExisting(mutexName + ".Show"); request.Set(); }
+                catch (WaitHandleCannotBeOpenedException) { }
+            }
             Shutdown();
             return;
         }
+        _showWindowRequest = new EventWaitHandle(false, EventResetMode.AutoReset, mutexName + ".Show");
+        _showWindowWait = ThreadPool.RegisterWaitForSingleObject(_showWindowRequest, (_, _) =>
+        {
+            if (!_isExiting && !Dispatcher.HasShutdownStarted)
+                Dispatcher.BeginInvoke(ShowMainWindow);
+        }, null, Timeout.Infinite, executeOnlyOnce: false);
 
         var paths = new AppPaths();
         paths.EnsureCreated();
@@ -161,30 +87,15 @@ public partial class App : System.Windows.Application
         LocalPerformanceDiagnostics.Initialize(_logger);
         await _logger.InfoAsync(
             $"Another Surface {typeof(App).Assembly.GetName().Version?.ToString(3)}을 시작했습니다. " +
-            "상주 제어부는 WPF 소프트웨어 렌더링을 사용하고 월페이퍼는 별도 프로세스로 재생합니다.");
+            "월페이퍼·위젯·Dock을 단일 프로세스에서 관리합니다.");
+        await _logger.InfoAsync($"실행 경로={Environment.ProcessPath}, Windows 로그인 시작={isWindowsStartup}");
         _settingsStore = new JsonSettingsStore(paths.SettingsFile);
         if (!isSmokeTest && !isDockPreview)
         {
             _sessionMarkerPath = paths.SessionMarkerFile;
             if (File.Exists(_sessionMarkerPath))
                 await _logger.InfoAsync("이전 세션의 비정상 종료 표식이 남아 있습니다.");
-            SessionRecoveryGuard.MarkActive(
-                _sessionMarkerPath,
-                Environment.ProcessId);
-            _sessionRecoveryGuard = SessionRecoveryGuard.Start(
-                Environment.ProcessId,
-                _sessionMarkerPath,
-                isRecoveredSession ? 1 : 0);
-            if (_sessionRecoveryGuard is null)
-            {
-                await _logger.InfoAsync(
-                    "비정상 종료 복구 가드를 시작하지 못했습니다.");
-            }
-            else if (isRecoveredSession)
-            {
-                await _logger.InfoAsync(
-                    "비정상 종료를 감지해 마지막 세션을 한 번 자동 복구합니다.");
-            }
+            SessionMarker.MarkActive(_sessionMarkerPath, Environment.ProcessId);
         }
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
@@ -323,6 +234,7 @@ public partial class App : System.Windows.Application
             {
                 startupRegistrationService.SetEnabled(
                     _settings.LaunchAtWindowsLogin);
+                await _logger.InfoAsync($"Windows 자동 실행 등록 확인: 활성={_settings.LaunchAtWindowsLogin}, 경로={Environment.ProcessPath}");
             }
             catch (Exception exception)
             {
@@ -376,8 +288,9 @@ public partial class App : System.Windows.Application
 
     public void ShowMainWindow()
     {
-        if (_mainWindow is null)
+        if (_mainWindow is null || _mainWindow.Opacity == 0)
         {
+            _showWindowPending = true;
             return;
         }
 
@@ -406,6 +319,11 @@ public partial class App : System.Windows.Application
         _mainWindow.ShowActivated = true;
         _mainWindow.ShowInTaskbar = true;
         ApplyDockSettings();
+        if (_showWindowPending)
+        {
+            _showWindowPending = false;
+            ShowMainWindow();
+        }
     }
 
     public async Task TogglePlaybackAsync()
@@ -453,40 +371,6 @@ public partial class App : System.Windows.Application
         }
 
         return null;
-    }
-
-    private static string? GetStringArgument(
-        IReadOnlyList<string> arguments,
-        string argumentName)
-    {
-        for (var index = 0; index + 1 < arguments.Count; index++)
-        {
-            if (arguments[index].Equals(
-                    argumentName,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return arguments[index + 1];
-            }
-        }
-
-        return null;
-    }
-
-    private static bool TryGetSessionGuardArguments(
-        IReadOnlyList<string> arguments,
-        out int ownerProcessId,
-        out string markerPath,
-        out int recoveryAttempt)
-    {
-        ownerProcessId =
-            GetIntegerArgument(arguments, "--session-guard") ?? 0;
-        markerPath =
-            GetStringArgument(arguments, "--session-marker") ??
-            string.Empty;
-        recoveryAttempt =
-            GetIntegerArgument(arguments, "--recovery-attempt") ?? 0;
-        return ownerProcessId > 0 &&
-               !string.IsNullOrWhiteSpace(markerPath);
     }
 
     private void MainWindow_DockSettingsChanged(
@@ -778,7 +662,7 @@ public partial class App : System.Windows.Application
         if (controllerDisposedCleanly &&
             !string.IsNullOrWhiteSpace(_sessionMarkerPath))
         {
-            SessionRecoveryGuard.MarkCleanExit(
+            SessionMarker.MarkCleanExit(
                 _sessionMarkerPath,
                 Environment.ProcessId);
             _sessionMarkerPath = null;
@@ -789,8 +673,6 @@ public partial class App : System.Windows.Application
             await _logger.InfoAsync(
                 "정리 실패를 감지해 다음 실행의 데스크톱 복구 마커를 유지합니다.");
         }
-        _sessionRecoveryGuard?.Dispose();
-        _sessionRecoveryGuard = null;
 
         if (_logger is not null)
         {
@@ -800,6 +682,8 @@ public partial class App : System.Windows.Application
         }
 
         _mainWindow?.Close();
+        _showWindowWait?.Unregister(null);
+        _showWindowRequest?.Dispose();
         if (_ownsMutex)
         {
             _singleInstanceMutex?.ReleaseMutex();
@@ -812,6 +696,8 @@ public partial class App : System.Windows.Application
 
     private void OnDomainUnhandledException(object sender, UnhandledExceptionEventArgs args)
     {
+        try { _taskbarController?.Restore(); }
+        catch { } // Restore the taskbar before a fatal error ends the single process.
         // A background-thread exception can terminate the process without
         // reaching WPF's dispatcher handler. Do not depend on an async logger.
         try

@@ -9,46 +9,6 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $env:DOTNET_CLI_HOME = Join-Path $projectRoot ".work\dotnet-cli"
 $env:NUGET_PACKAGES = Join-Path $projectRoot ".work\packages"
-$vswhere = Join-Path ${env:ProgramFiles(x86)} `
-    "Microsoft Visual Studio\Installer\vswhere.exe"
-if (-not (Test-Path -LiteralPath $vswhere)) {
-    throw "Visual Studio Installer의 vswhere.exe를 찾을 수 없습니다."
-}
-
-$msbuild = & $vswhere `
-    -latest `
-    -products * `
-    -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
-    -find "MSBuild\**\Bin\amd64\MSBuild.exe" |
-    Select-Object -First 1
-if ([string]::IsNullOrWhiteSpace($msbuild)) {
-    throw "Visual Studio C++ x64 빌드 도구를 찾을 수 없습니다."
-}
-
-$nativeProject = Join-Path $projectRoot `
-    "src\AnotherSurface.Renderer.Native\AnotherSurface.Renderer.Native.vcxproj"
-$pathRows = @(& cmd.exe /d /c "set path") |
-    Where-Object { $_ -match '^(?i:path)=' }
-if ($pathRows.Count -gt 1) {
-    # Some automation hosts inject both PATH and Path. .NET Framework
-    # MSBuild treats them as duplicate dictionary keys when it starts cl.exe.
-    $nativeCommand =
-        "set PATH=& call `"$msbuild`" `"$nativeProject`" " +
-        "/t:Build /p:Configuration=$Configuration /p:Platform=x64 /m:1"
-    & cmd.exe /d /c $nativeCommand
-}
-else {
-    & $msbuild `
-        $nativeProject `
-        /t:Build `
-        "/p:Configuration=$Configuration" `
-        /p:Platform=x64 `
-        /m:1
-}
-if ($LASTEXITCODE -ne 0) {
-    throw "C++ 네이티브 렌더러 빌드에 실패했습니다."
-}
-
 $fxc = Get-ChildItem -LiteralPath (Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin') -Recurse -Filter fxc.exe -File |
     Where-Object FullName -Match '\\x64\\' | Sort-Object FullName | Select-Object -Last 1 -ExpandProperty FullName
 if (-not $fxc) { throw 'Windows SDK의 x64 HLSL 컴파일러(fxc.exe)를 찾을 수 없습니다.' }
@@ -78,7 +38,7 @@ if (-not $SkipTests) {
 }
 
 if ($Package) {
-    $running = Get-Process AnotherSurface.App,AnotherSurface.Renderer.Native -ErrorAction SilentlyContinue
+    $running = Get-Process AnotherSurface,AnotherSurface.App,AnotherSurface.Renderer.Native -ErrorAction SilentlyContinue
     if ($running) {
         throw "배포 폴더를 갱신하기 전에 Another Surface를 종료하세요."
     }
@@ -86,7 +46,7 @@ if ($Package) {
     $version = $appProject.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
     $output = Join-Path $projectRoot "src\AnotherSurface.App\bin\$Configuration\net8.0-windows10.0.17763.0"
     $packageRoot = Join-Path $projectRoot "artifacts"
-    $packageDirectory = Join-Path $packageRoot "AnotherSurface-$version"
+    $packageDirectory = Join-Path $packageRoot "AnotherSurface"
     $stamp = Get-Date -Format "yyyyMMdd-HHmmss-fff"
     $staging = Join-Path $projectRoot ".work\tmp\package-$stamp"
     $backup = Join-Path $projectRoot ".work\tmp\AnotherSurface-$version-before-$stamp"
@@ -103,7 +63,7 @@ if ($Package) {
             }
         }
     }
-    foreach ($required in @("AnotherSurface.App.exe", "AnotherSurface.App.dll", "AnotherSurface.Core.dll", "AnotherSurface.Windows.dll", "AnotherSurface.Renderer.Native.exe")) {
+    foreach ($required in @("AnotherSurface.exe", "AnotherSurface.dll", "AnotherSurface.Core.dll", "AnotherSurface.Windows.dll")) {
         if (-not (Test-Path -LiteralPath (Join-Path $output $required))) { throw "배포 파일 누락: $required" }
     }
     New-Item -ItemType Directory -Path $staging -Force | Out-Null
@@ -113,6 +73,9 @@ if ($Package) {
         -c $Configuration --no-build --no-restore -o $staging `
         /p:CopyOutputSymbolsToPublishDirectory=false
     if ($LASTEXITCODE -ne 0) { throw "배포 파일 게시에 실패했습니다." }
+    if (Get-ChildItem -LiteralPath $staging -Filter *.exe -Recurse -File | Where-Object Name -NE 'AnotherSurface.exe') {
+        throw "별도 렌더러 실행 파일이 단일 프로세스 배포본에 포함되었습니다."
+    }
     if (Get-ChildItem -LiteralPath $staging -Recurse -File | Where-Object Name -Match 'WebView2|WebView|Microsoft.Web') {
         throw "제거된 브라우저 의존성이 배포본에 포함되었습니다."
     }
