@@ -2,7 +2,7 @@
   <img src="src/AnotherSurface.App/Assets/Brand/another-surface-dock-icon-v3.png" width="400" alt="초미 Another Surface 아이콘" />
 </p>
 <h1 align="center">Another Surface</h1>
-<p align="center">월페이퍼 · 위젯 · 스티커 · Dock<br />0.10.7 · Windows x64</p>
+<p align="center">월페이퍼 · 위젯 · 스티커 · Dock<br />0.11.0 · Windows x64</p>
 
 ## 주요 기능
 
@@ -18,8 +18,9 @@
 ## 실행
 
 - **환경:** Windows 10 1809 이상 / Windows 11, x64, .NET 8 Desktop Runtime
-- **실행 파일:** [`artifacts/AnotherSurface-0.10.7/AnotherSurface.App.exe`](artifacts/AnotherSurface-0.10.7/)
-- **배포 폴더 전체 유지:** DLL·Assets·네이티브 렌더러 필요
+- **실행 파일:** [`artifacts/AnotherSurface/AnotherSurface.exe`](artifacts/AnotherSurface/)
+- **배포 폴더 전체 유지:** DLL·Assets 필요. `AnotherSurface.exe` 한 프로세스에서 모든 화면과 위젯을 관리
+- **자동 실행:** 설정에서 Windows 로그인 시 자동 실행 활성화. 업데이트는 같은 폴더에 적용하고, 폴더를 이동했다면 새 위치에서 앱을 한 번 실행
 - **지원 형식:** JPG, JPEG, PNG, BMP, GIF, MP4, WebM
 - **영상 최적화:** FFmpeg·FFprobe 선택 사용
 
@@ -36,7 +37,7 @@
 
 ## 빌드
 
-**.NET SDK 9.0.308 · MSVC v143 x64 · Windows SDK**
+**.NET SDK 9.0.308 · Windows SDK(HLSL 컴파일러)**
 
 ```powershell
 git clone https://github.com/JellytoCodes/Another-Surface.git
@@ -46,7 +47,7 @@ Set-Location Another-Surface
 
 | 명령 | 작업 |
 | --- | --- |
-| `scripts/build-release.ps1` | C++ 렌더러 → WPF 앱 → 테스트 |
+| `scripts/build-release.ps1` | 영상 색상 셰이더 → 앱 → 테스트 |
 | `scripts/build-release.ps1 -Package` | 빌드·테스트 후 배포 폴더 생성 |
 | `dotnet test tests/AnotherSurface.Tests -c Release` | 테스트 실행 |
 
@@ -56,8 +57,7 @@ Set-Location Another-Surface
 | --- | --- |
 | `src/AnotherSurface.App` | WPF 설정 화면·트레이·Dock |
 | `src/AnotherSurface.Core` | 설정·라이브러리·영상 캐시 |
-| `src/AnotherSurface.Windows` | Win32 연동·위젯·관리형 렌더러 |
-| `src/AnotherSurface.Renderer.Native` | C++20 · D3D11 · DirectComposition · Media Foundation |
+| `src/AnotherSurface.Windows` | Win32 연동·위젯·공유 렌더링 스레드·Media Foundation |
 | `tests/AnotherSurface.Tests` | 단위·Windows 통합 테스트 |
 
 ## 참고

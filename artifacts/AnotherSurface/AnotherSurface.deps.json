@@ -6,13 +6,13 @@
   "compilationOptions": {},
   "targets": {
     ".NETCoreApp,Version=v8.0": {
-      "AnotherSurface.App/0.10.7": {
+      "AnotherSurface/0.11.0": {
         "dependencies": {
           "AnotherSurface.Windows": "1.0.0",
           "runtimepack.Microsoft.Windows.SDK.NET.Ref": "10.0.17763.57"
         },
         "runtime": {
-          "AnotherSurface.App.dll": {}
+          "AnotherSurface.dll": {}
         }
       },
       "runtimepack.Microsoft.Windows.SDK.NET.Ref/10.0.17763.57": {
@@ -49,7 +49,7 @@
     }
   },
   "libraries": {
-    "AnotherSurface.App/0.10.7": {
+    "AnotherSurface/0.11.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
