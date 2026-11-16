@@ -12,3 +12,9 @@ TestResults/
 
 # Build caches, rollback packages and diagnostics.
 /.work/
+
+# Generated packages and installers are distributed through GitHub Releases.
+/artifacts/
+
+# Local artwork originals and retired drafts; runtime assets live under src/.
+/assets/originals/

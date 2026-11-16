@@ -9,7 +9,7 @@
 
 ## 참고
 
-- Windows 10 1809 이상 / Windows 11, x64 및 .NET 8 Desktop Runtime이 필요합니다.
-- [배포 폴더](artifacts/AnotherSurface/)의 DLL·Assets를 함께 유지한 상태에서 AnotherSurface.exe를 실행하세요.
+- Windows 10 1809 이상 / Windows 11, x64에서 사용할 수 있습니다.
+- [설치 파일](https://github.com/JellytoCodes/another-surface/releases/latest)의 Setup.exe를 실행하세요. .NET 실행 환경이 포함되어 있습니다.
 - 전체 화면 앱 감지에 따른 자동 일시정지는 지원하지 않으며, 영상 재생은 Windows 코덱 환경에 따라 달라질 수 있습니다.
 - 시스템 정보 위젯 배치 참고: [SysDash](https://github.com/marcopixel/SysDash)
