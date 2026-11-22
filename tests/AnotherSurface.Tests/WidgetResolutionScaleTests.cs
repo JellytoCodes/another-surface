@@ -234,7 +234,7 @@ public sealed class WidgetResolutionScaleTests
             try
             {
                 var settings = new WidgetSettings { ShowClock = kind == WidgetKind.Clock,
-                    ShowSystemInfo = kind == WidgetKind.SystemInfo, };
+                    ShowSystemInfo = kind == WidgetKind.SystemInfo, ClockStyle = ClockStyle.DigitalStacked };
                 settings.SetPlacement(kind, new WidgetPlacement { Anchor = WidgetAnchor.Custom, X = 0.2, Y = 0.25, IsLocked = false });
                 Assert.True(renderer.ApplySettingsAsync(settings).IsCompletedSuccessfully);
                 var display = CreateDisplay(width, height);
@@ -244,6 +244,10 @@ public sealed class WidgetResolutionScaleTests
                 var editor = Assert.Single(renderer.EditingHandles);
                 Assert.True(NativeMethods.IsWindow(editor));
                 var original = ReadPhysicalBounds(handle);
+                var originalEditor = ReadPhysicalBounds(editor);
+                Assert.Equal(original, originalEditor);
+                if (kind == WidgetKind.Clock)
+                    Assert.True(original.Right - original.Left < original.Bottom - original.Top);
                 var changes = new List<WidgetPlacementChangedEventArgs>();
                 renderer.PlacementChanged += (_, args) => changes.Add(args);
                 renderer.ResizeWidget(kind, 1.137, false);
@@ -251,6 +255,7 @@ public sealed class WidgetResolutionScaleTests
                 Assert.Equal(handle, Assert.Single(renderer.PanelHandles));
                 renderer.ResizeWidget(kind, 1.313, true);
                 var resized = ReadPhysicalBounds(handle);
+                Assert.Equal(resized, ReadPhysicalBounds(editor));
                 Assert.InRange(Math.Abs((resized.Right - resized.Left) - (original.Right - original.Left) * 1.313), 0, 2);
                 Assert.InRange(Math.Abs((resized.Bottom - resized.Top) - (original.Bottom - original.Top) * 1.313), 0, 2);
                 Assert.Equal(original.Left, resized.Left);

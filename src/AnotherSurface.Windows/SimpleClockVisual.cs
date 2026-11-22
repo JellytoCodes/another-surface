@@ -32,8 +32,8 @@ public sealed class SimpleClockVisual : Canvas
     {
         SetColor(color);
         SelectedStyle = Enum.IsDefined(style) ? style : ClockStyle.DigitalClean;
-        Width = NaturalWidth;
-        Height = NaturalHeight;
+        Width = SelectedStyle == ClockStyle.DigitalStacked ? 124 : NaturalWidth;
+        Height = SelectedStyle == ClockStyle.DigitalStacked ? 188 : NaturalHeight;
         ClipToBounds = false;
         IsHitTestVisible = false;
         Effect = new DropShadowEffect
@@ -63,9 +63,10 @@ public sealed class SimpleClockVisual : Canvas
                 _date = AddText(12, FontWeights.Normal, 20, 139, 280, 24, _secondaryForeground);
                 break;
             case ClockStyle.DigitalStacked:
-                _primary = AddText(88, FontWeights.Bold, 70, -11, 180, 110);
-                _secondary = AddText(88, FontWeights.Bold, 70, 72, 180, 110);
-                _date = AddText(10, FontWeights.Normal, 20, 183, 280, 17, _secondaryForeground);
+                // Keep a stable frame as the digits change, with room for their shadow.
+                _primary = AddText(88, FontWeights.Bold, 0, -23, Width, 110);
+                _secondary = AddText(88, FontWeights.Bold, 0, 60, Width, 110);
+                _date = AddText(10, FontWeights.Normal, 0, 171, Width, 17, _secondaryForeground);
                 break;
             case ClockStyle.DigitalMono:
                 _primary = AddText(69, FontWeights.Normal, 5, 55, 310, 93);

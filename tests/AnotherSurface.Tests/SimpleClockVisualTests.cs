@@ -76,7 +76,7 @@ public sealed class SimpleClockVisualTests
     }
 
     [Fact]
-    public void AllStyles_RenderDistinctTransparentClocksInsideTheSameFootprint()
+    public void AllStyles_RenderDistinctTransparentClocksInsideTheirFootprints()
     {
         RunOnStaThread(() =>
         {
@@ -85,22 +85,58 @@ public sealed class SimpleClockVisualTests
             {
                 var clock = new SimpleClockVisual(style);
                 clock.Update(new DateTime(2024, 10, 13, 9, 41, 26));
-                clock.Measure(new System.Windows.Size(SimpleClockVisual.NaturalWidth, SimpleClockVisual.NaturalHeight));
-                clock.Arrange(new Rect(0, 0, SimpleClockVisual.NaturalWidth, SimpleClockVisual.NaturalHeight));
-                var bitmap = new RenderTargetBitmap(320, 200, 96, 96, PixelFormats.Pbgra32);
+                var width = (int)clock.Width;
+                var height = (int)clock.Height;
+                clock.Measure(new System.Windows.Size(width, height));
+                clock.Arrange(new Rect(0, 0, width, height));
+                var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
                 bitmap.Render(clock);
-                var pixels = new byte[320 * 200 * 4];
-                bitmap.CopyPixels(pixels, 320 * 4, 0);
+                var pixels = new byte[width * height * 4];
+                bitmap.CopyPixels(pixels, width * 4, 0);
 
                 // A clock must actually draw, leave the desktop visible, and fit its allocation.
-                var drawnPixels = Enumerable.Range(0, 320 * 200)
+                var drawnPixels = Enumerable.Range(0, width * height)
                     .Count(index => pixels[index * 4 + 3] > 20);
                 Assert.InRange(drawnPixels, 300, 14000);
-                Assert.All(new[] { 0, 319, 199 * 320, 200 * 320 - 1 },
+                Assert.All(new[] { 0, width - 1, (height - 1) * width, height * width - 1 },
                     index => Assert.Equal(0, pixels[index * 4 + 3]));
                 Assert.All(frames, frame => Assert.False(frame.SequenceEqual(pixels)));
                 frames.Add(pixels);
             }
+        });
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(9, 53)]
+    [InlineData(11, 11)]
+    [InlineData(23, 59)]
+    public void StackedClock_FitsBothRowsAndDateWithSmallSideMargins(int hour, int minute)
+    {
+        RunOnStaThread(() =>
+        {
+            var clock = new SimpleClockVisual(ClockStyle.DigitalStacked);
+            clock.Update(new DateTime(2026, 11, 22, hour, minute, 0));
+            var width = (int)clock.Width;
+            var height = (int)clock.Height;
+            clock.Measure(new System.Windows.Size(width, height));
+            clock.Arrange(new Rect(0, 0, width, height));
+            var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(clock);
+            var pixels = new byte[width * height * 4];
+            bitmap.CopyPixels(pixels, width * 4, 0);
+            var ink = Enumerable.Range(0, width * height)
+                .Where(index => pixels[index * 4 + 3] > 20)
+                .Select(index => (X: index % width, Y: index / width))
+                .ToArray();
+
+            Assert.InRange(ink.Min(pixel => pixel.X), 4, 28);
+            Assert.InRange(width - 1 - ink.Max(pixel => pixel.X), 4, 28);
+            Assert.InRange(ink.Min(pixel => pixel.Y), 2, 19);
+            Assert.InRange(height - 1 - ink.Max(pixel => pixel.Y), 2, 14);
+            Assert.Contains(ink, pixel => pixel.Y < 80);
+            Assert.Contains(ink, pixel => pixel.Y is >= 85 and < 160);
+            Assert.Contains(ink, pixel => pixel.Y >= 170);
         });
     }
 
